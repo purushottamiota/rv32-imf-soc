@@ -1,360 +1,365 @@
-//////////////// Including Stages ////////////////////////////
-`include "IF_ID.v"
-`include "execute.v"
-`include "memory.v" // FIXED: Include
-`include "wb.v"
+`timescale 1ns/1ps
+// Stage files and hazard unit are compiled natively via Vivado workspace.
 
- module pipe
-#(
-	parameter [31:0]            RESET = 32'h0000_0000
-)
-(
+module pipe #(
+	parameter [31:0] RESET = 32'h0000_0000
+) (
 	input                   clk,
 	input                   reset,
 	input                   stall,
-	output                  exception,  
-	output [31:0] pc_out,
+	output                  exception,
+	output [31:0]           pc_out,
 
 	// interface of instruction Memory
-	output      [31: 0] inst_mem_address,  // FIXED: Converted from internal wire to output port
+	output      [31: 0] inst_mem_address,
 	input                   inst_mem_is_valid,
 	input       [31: 0] inst_mem_read_data,
-	output                  inst_mem_is_ready, // FIXED: Converted from internal wire to output port
+	output                  inst_mem_is_ready,
 
 	// interface of Data Memory
-	output      [31: 0] dmem_read_address, // FIXED: Converted from internal wire to output port
-	output                  dmem_read_ready,   // FIXED: Converted from internal wire to output port
+	output      [31: 0] dmem_read_address,
+	output                  dmem_read_ready,
 	input       [31: 0] dmem_read_data_temp,
 	input                   dmem_read_valid,
-	output      [31: 0] dmem_write_address, // FIXED: Converted from internal wire to output port
-	output                  dmem_write_ready,   // FIXED: Converted from internal wire to output port
-	output      [31: 0] dmem_write_data,   // FIXED: Converted from internal wire to output port
-	output      [ 3: 0] dmem_write_byte,   // FIXED: Converted from internal wire to output port
+	output      [31: 0] dmem_write_address,
+	output                  dmem_write_ready,
+	output      [31: 0] dmem_write_data,
+	output      [ 3: 0] dmem_write_byte,
 	input                   dmem_write_valid
 );
     
-	//Declaring Wires and Registers
-
-	//Data Memory Wires
+    // Register File
+    reg [31:0] regs [31:1];
     
-	wire      [31: 0] dmem_read_data;
-	// FIXED: Removed wires that are now ports (dmem_write_ready, dmem_read_ready, dmem_write_address, dmem_read_address, dmem_write_data, dmem_write_byte, inst_mem_is_ready, inst_mem_address)
-	wire        [1:0]  dmem_read_offset;
-	wire              dmem_read_valid_checker;
+    // ----------------------------------------------------
+    // Wires
+    // ----------------------------------------------------
     
-	//Instruction Fetch/Decode Stage
+    // Hazard Unit Wires
+    wire [1:0] forward_a;
+    wire [1:0] forward_b;
+    wire stall_if_haz;
+    wire stall_id_haz;
+    wire flush_id_haz;
+    wire flush_if_haz;
     
-	reg       [31: 0] immediate;
-	wire               immediate_sel;
-	wire       [ 4: 0] src1_select;
-	wire       [ 4: 0] src2_select;
-	wire       [ 4: 0] dest_reg_sel;
-	wire       [ 2: 0] alu_operation;
-	wire               arithsubtype;
-	wire               mem_write;
-	wire               mem_to_reg;
-	wire               illegal_inst;
-	wire       [31: 0] execute_immediate;
-	wire               alu;
-	wire               lui;
-	wire               jal;
-	wire               jalr;
-	wire               branch;
-	reg               stall_read;
-	wire      [31: 0] instruction;
-	wire      [31: 0] reg_rdata2 ;
-	wire      [31: 0] reg_rdata1;
-	reg       [31: 0] regs [31: 1];
-
-	// PC
-
-	wire        [31: 0] pc;
-	wire        [31: 0] inst_fetch_pc;
-	reg        [31: 0] fetch_pc ;  
-
-	//Stalls
+    wire stage_stall_if = stall | stall_if_haz;
+    wire stage_stall_id = stall | stall_id_haz;
     
-	wire 	wb_stall_first;
-	wire 	wb_stall_second;
-	wire	wb_stall;   	 
-        	 
-       	 
-	//Execute Stage
+    // IF Wires
+    wire [31:0] if_pc_out;
+    wire        branch_taken;
+    wire [31:0] branch_target;
 
+    assign pc_out = if_pc_out;
+
+    // ID Wires
+    wire [31:0] id_pc;
+    wire [31:0] id_inst;
     
-	wire         [31: 0] next_pc;
-	wire        [31: 0] write_address;
-	wire                 branch_taken;
-	wire                 branch_stall;
-	wire        [31:0] alu_operand1;
-	wire        [31:0] alu_operand2;
-
-	// Write Back
+    wire [31:0] id_immediate;
+    wire        id_immediate_sel;
+    wire        id_alu;
+    wire        id_lui;
+    wire        id_jal;
+    wire        id_jalr;
+    wire        id_branch;
+    wire        id_mem_write;
+    wire        id_mem_read;
+    wire        id_mem_to_reg;
+    wire        id_arithsubtype;
+    wire [4:0]  id_rs1;
+    wire [4:0]  id_rs2;
+    wire [4:0]  id_rd;
+    wire [2:0]  id_alu_op;
+    wire        id_illegal_inst;
     
-	wire                 wb_alu_to_reg;
-	wire        [31: 0] wb_result;
-	wire        [ 2: 0] wb_alu_operation;
-	wire                 wb_mem_write;
-	wire                 wb_mem_to_reg;
-	wire        [ 4: 0] wb_dest_reg_sel;
-	wire                 wb_branch;
-	wire                 wb_branch_nxt;
-	wire        [31: 0] wb_write_address;
-	wire        [ 1: 0] wb_read_address;
-	wire        [ 3: 0] wb_write_byte;
-	wire        [31: 0] wb_write_data;
-	wire        [31: 0] wb_read_data;
-	// wire       [31: 0] inst_mem_address; // FIXED: Removed, now a port
+    wire [31:0] id_reg_rdata1;
+    wire [31:0] id_reg_rdata2;
 
-//------------------------------------------------------//
-assign dmem_write_address       = wb_write_address; 	// assigning where to write
-assign dmem_read_address        = alu_operand1 + execute_immediate;  // Assigning address to read from the data memory
-assign dmem_read_offset = dmem_read_address[1:0];
-assign dmem_read_ready          = mem_to_reg;   // load instruction flag to read from memory
-assign dmem_write_ready         = wb_mem_write; 	// flag to write into the memory
-assign dmem_write_data          = wb_write_data;	// assigning data to write
-assign dmem_write_byte          = wb_write_byte;	// flag for writing the data bytes
-assign dmem_read_data           = dmem_read_data_temp;  	// data read from the memory
-assign dmem_read_valid_checker  = 1'b1;
-// -----------------------------------------------------//
+    // EX Wires
+    wire [31:0] ex_pc;
+    wire [31:0] ex_immediate;
+    wire [31:0] ex_reg_rdata1;
+    wire [31:0] ex_reg_rdata2;
+    wire [4:0]  ex_rs1;
+    wire [4:0]  ex_rs2;
+    wire [4:0]  ex_rd;
+    wire [2:0]  ex_alu_op;
+    wire        ex_immediate_sel;
+    wire        ex_alu;
+    wire        ex_lui;
+    wire        ex_jal;
+    wire        ex_jalr;
+    wire        ex_branch;
+    wire        ex_mem_write;
+    wire        ex_mem_read;
+    wire        ex_mem_to_reg;
+    wire        ex_arithsubtype;
+    wire        ex_illegal_inst;
+    
+    // Internal EX -> EX/MEM Reg
+    wire [31:0] ex_result_calc;
+    wire [31:0] ex_write_data_calc;
 
-// instantiating Instruction fetch module -----------------------
-IF_ID IF_ID_stage (
-	.clk            (clk),
-	.reset          (reset),
-	.stall          (stall),
-	.exception      (exception),
+    // MEM Wires
+    wire [31:0] mem_ex_result;
+    wire [31:0] mem_write_data;
+    wire [4:0]  mem_rd;
+    wire [2:0]  mem_alu_op;
+    wire        mem_mem_write;
+    wire        mem_mem_read;
+    wire        mem_mem_to_reg;
+    wire        mem_alu_to_reg;
 
-	// Instruction memory interface
-	.inst_mem_is_valid  (inst_mem_is_valid),
-	.inst_mem_read_data (inst_mem_read_data),
+    // WB Wires
+    wire [31:0] wb_ex_result;
+    wire [4:0]  wb_rd;
+    wire        wb_mem_to_reg;
+    wire        wb_alu_to_reg;
+    wire [2:0]  wb_alu_op;
+    wire [1:0]  wb_mem_read_offset;
+    wire [31:0] wb_result;
 
-	// Previously pipe.* signals (now explicit ports)
-	.stall_read_i   (stall_read),
-	.inst_fetch_pc  (inst_fetch_pc),
-	.instruction_i  (instruction),
+    assign exception = wb_result === 32'hx && ex_illegal_inst; // Optional assignment
 
-	// WB-stage signals
-	.wb_stall       (wb_stall),
-	.wb_alu_to_reg  (wb_alu_to_reg),
-	.wb_mem_to_reg  (wb_mem_to_reg),
-	.wb_dest_reg_sel(wb_dest_reg_sel),
-	.wb_result      (wb_result),
-	.wb_read_data   (wb_read_data),
+    // ----------------------------------------------------
+    // Internal RegFile Forwarding (Read in ID)
+    // ----------------------------------------------------
+    assign id_reg_rdata1 = (id_rs1 == 5'd0) ? 32'b0 :
+                           (wb_alu_to_reg && (wb_rd == id_rs1)) ? wb_result :
+                           regs[id_rs1];
 
-	// Instruction memory address offset
-	.inst_mem_offset(inst_mem_address[1:0]),
+    assign id_reg_rdata2 = (id_rs2 == 5'd0) ? 32'b0 :
+                           (wb_alu_to_reg && (wb_rd == id_rs2)) ? wb_result :
+                           regs[id_rs2];
 
-	// Output wires (write-only)
-	.execute_immediate_w (execute_immediate),
-	.immediate_sel_w	(immediate_sel),
-	.alu_w          (alu),
-	.lui_w          (lui),
-	.jal_w          (jal),
-	.jalr_w         (jalr),
-	.branch_w       (branch),
-	.mem_write_w    (mem_write),
-	.mem_to_reg_w   (mem_to_reg),
-	.arithsubtype_w 	(arithsubtype),
-	.pc_w           (pc),
-	.src1_select_w  (src1_select),
-	.src2_select_w  (src2_select),
-	.dest_reg_sel_w 	(dest_reg_sel),
-	.alu_operation_w	(alu_operation),
-	.illegal_inst_w 	(illegal_inst),
-	.instruction_o  (instruction)
-);
+    // ----------------------------------------------------
+    // RegFile Write
+    // ----------------------------------------------------
+    integer i;
+    always @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            for (i=1; i<32; i=i+1) regs[i] <= 32'b0;
+        end else if (wb_alu_to_reg && wb_rd != 5'd0 && !stall) begin
+            regs[wb_rd] <= wb_result;
+        end
+    end
 
+    // ----------------------------------------------------
+    // Modules
+    // ----------------------------------------------------
 
-////////////////////////////////////////////////////////////
-// TODO: Register File Forwarding
-//
-// - If src register is x0 (5'd0) → return 0
-// - If WB stage writes same register (and not stalled) → forward:
-//    	wb_read_data (for LOAD)
-//    	wb_result	(for ALU)
-// - Else → read from register array (regs)
-////////////////////////////////////////////////////////////
+    hazard_unit u_hazard (
+        .id_ex_rs1        (ex_rs1),
+        .id_ex_rs2        (ex_rs2),
+        .ex_mem_rd        (mem_rd),
+        .ex_mem_reg_write (mem_alu_to_reg),
+        .mem_wb_rd        (wb_rd),
+        .mem_wb_reg_write (wb_alu_to_reg),
+        
+        .if_id_rs1        (id_rs1),
+        .if_id_rs2        (id_rs2),
+        .id_ex_rd         (ex_rd),
+        .id_ex_mem_read   (ex_mem_read),
+        .branch_taken     (branch_taken),
+        
+        .forward_a        (forward_a),
+        .forward_b        (forward_b),
+        .stall_if         (stall_if_haz),
+        .stall_id         (stall_id_haz),
+        .flush_id         (flush_id_haz),
+        .flush_if         (flush_if_haz)
+    );
 
-assign reg_rdata1 =
-	(src1_select == 5'd0) ? 32'b0 : // FIXED: Return 0
-	(!wb_stall && wb_alu_to_reg &&
- 	(wb_dest_reg_sel == src1_select))
-    	? (wb_mem_to_reg ? wb_read_data : wb_result)
-    	: regs[src1_select]; // FIXED: Read from array
+    if_stage #( .RESET_PC(RESET) ) u_if_stage (
+        .clk              (clk),
+        .reset            (reset),
+        .stall            (stage_stall_if),
+        .branch_taken     (branch_taken),
+        .branch_target    (branch_target),
+        .inst_mem_address (inst_mem_address),
+        .inst_mem_is_ready(inst_mem_is_ready),
+        .pc_o             (if_pc_out)
+    );
 
-assign reg_rdata2 = // FIXED: Implemented rdata2 logic identical to rdata1
-	(src2_select == 5'd0) ? 32'b0 :
-	(!wb_stall && wb_alu_to_reg &&
- 	(wb_dest_reg_sel == src2_select))
-    	? (wb_mem_to_reg ? wb_read_data : wb_result)
-    	: regs[src2_select];
+    if_id_reg u_if_id_reg (
+        .clk               (clk),
+        .reset             (reset),
+        .stall             (stage_stall_id),
+        .flush             (flush_if_haz),
+        .if_pc             (if_pc_out),
+        .inst_mem_read_data(inst_mem_read_data),
+        .inst_mem_is_valid (inst_mem_is_valid),
+        .id_pc             (id_pc),
+        .id_instruction    (id_inst)
+    );
 
-////////////////////////////////////////////////////////////
-// TODO: Register File Writeback
-//
-// On reset:
-//   - Clear registers x1-x31
-//
-// On valid WB cycle:
-//   - If wb_alu_to_reg asserted
-//   - AND no stall
-//   - Write either:
-//    	wb_read_data (LOAD)
-//    	wb_result	(ALU result)
-////////////////////////////////////////////////////////////
+    id_stage u_id_stage (
+        .instruction_i (id_inst),
+        .immediate     (id_immediate),
+        .immediate_sel (id_immediate_sel),
+        .alu           (id_alu),
+        .lui           (id_lui),
+        .jal           (id_jal),
+        .jalr          (id_jalr),
+        .branch        (id_branch),
+        .mem_write     (id_mem_write),
+        .mem_read      (id_mem_read),
+        .mem_to_reg    (id_mem_to_reg),
+        .arithsubtype  (id_arithsubtype),
+        .src1_sel      (id_rs1),
+        .src2_sel      (id_rs2),
+        .dest_reg_sel  (id_rd),
+        .alu_op        (id_alu_op),
+        .illegal_inst  (id_illegal_inst)
+    );
 
-integer i;
-always @(posedge clk or negedge reset) begin
-	if (!reset) begin
-    	for (i = 1; i < 32; i = i + 1)
-        	regs[i] <= 32'b0; // FIXED: Zero out registers on reset
-	end
-	// ADDED: && wb_dest_reg_sel != 5'd0 -> Register x0
-	else if (wb_alu_to_reg && !stall_read && !wb_stall && wb_dest_reg_sel != 5'd0) begin
-    	regs[wb_dest_reg_sel] <=
-        	wb_mem_to_reg ? wb_read_data : wb_result; // FIXED: Wrote result from WB stage
-	end
-end
+    id_ex_reg u_id_ex_reg (
+        .clk             (clk),
+        .reset           (reset),
+        .stall           (stall),
+        .flush           (flush_id_haz),
+        
+        .pc_i            (id_pc),
+        .immediate_i     (id_immediate),
+        .reg_rdata1_i    (id_reg_rdata1),
+        .reg_rdata2_i    (id_reg_rdata2),
+        .src1_sel_i      (id_rs1),
+        .src2_sel_i      (id_rs2),
+        .dest_reg_sel_i  (id_rd),
+        .alu_op_i        (id_alu_op),
 
+        .immediate_sel_i (id_immediate_sel),
+        .alu_i           (id_alu),
+        .lui_i           (id_lui),
+        .jal_i           (id_jal),
+        .jalr_i          (id_jalr),
+        .branch_i        (id_branch),
+        .mem_write_i     (id_mem_write),
+        .mem_read_i      (id_mem_read),
+        .mem_to_reg_i    (id_mem_to_reg),
+        .arithsubtype_i  (id_arithsubtype),
+        .illegal_inst_i  (id_illegal_inst),
 
-////////////////////////////////////////////////////////////
-// Stall register
-////////////////////////////////////////////////////////////
+        .pc_o            (ex_pc),
+        .immediate_o     (ex_immediate),
+        .reg_rdata1_o    (ex_reg_rdata1),
+        .reg_rdata2_o    (ex_reg_rdata2),
+        .src1_sel_o      (ex_rs1),
+        .src2_sel_o      (ex_rs2),
+        .dest_reg_sel_o  (ex_rd),
+        .alu_op_o        (ex_alu_op),
 
-always @(posedge clk or negedge reset) begin
-	if (!reset)
-    	stall_read <= 1'b1;
-	else
-    	stall_read <= stall;
-end
+        .immediate_sel_o (ex_immediate_sel),
+        .alu_o           (ex_alu),
+        .lui_o           (ex_lui),
+        .jal_o           (ex_jal),
+        .jalr_o          (ex_jalr),
+        .branch_o        (ex_branch),
+        .mem_write_o     (ex_mem_write),
+        .mem_read_o      (ex_mem_read),
+        .mem_to_reg_o    (ex_mem_to_reg),
+        .arithsubtype_o  (ex_arithsubtype),
+        .illegal_inst_o  (ex_illegal_inst)
+    );
 
+    ex_stage u_ex_stage (
+        .pc_i               (ex_pc),
+        .immediate_i        (ex_immediate),
+        .reg_rdata1_i       (ex_reg_rdata1),
+        .reg_rdata2_i       (ex_reg_rdata2),
+        .alu_op_i           (ex_alu_op),
+        .immediate_sel_i    (ex_immediate_sel),
+        .alu_i              (ex_alu),
+        .lui_i              (ex_lui),
+        .jal_i              (ex_jal),
+        .jalr_i             (ex_jalr),
+        .branch_i           (ex_branch),
+        .arithsubtype_i     (ex_arithsubtype),
+        
+        // Forwarding
+        .forward_a          (forward_a),
+        .forward_b          (forward_b),
+        .forward_ex_mem_val (mem_ex_result),
+        .forward_mem_wb_val (wb_result),
 
-// instantiating execute module -----------------------------------
-execute execute (
-	// -----------------
-	// Clock / Reset
-	// -----------------
-	.clk          (clk),
-	.reset        (reset),
+        .ex_result          (ex_result_calc),
+        .write_data_out     (ex_write_data_calc),
+        .branch_taken       (branch_taken),
+        .branch_target      (branch_target)
+    );
 
-	// -----------------
-	// FROM ID/EX
-	// -----------------
-	// ---- TODO: Connect ID/EX signals ----
-	.reg_rdata1   (reg_rdata1),
-	.reg_rdata2   (reg_rdata2),
-	.execute_imm  (execute_immediate),
-	.pc           (pc),
-	.fetch_pc     (fetch_pc),
-	.immediate_sel(immediate_sel),
-	.mem_write    (mem_write),
-	.jal          (jal),
-	.jalr         (jalr),
-	.lui          (lui),
-	.alu          (alu),
-	.branch       (branch),
-	.arithsubtype (arithsubtype),
-	.mem_to_reg   (mem_to_reg),
-	.stall_read   (stall_read),
-	.dest_reg_sel (dest_reg_sel),
-	.alu_op       (alu_operation),
-	.dmem_raddr   (dmem_read_offset),
+    wire ex_alu_to_reg = (ex_alu | ex_lui | ex_jal | ex_jalr | ex_mem_to_reg);
 
-	// -----------------
-	// FROM WB
-	// -----------------
-	.wb_branch_i  (wb_branch),
-	.wb_branch_nxt_i  (wb_branch_nxt),
+    ex_mem_reg u_ex_mem_reg (
+        .clk            (clk),
+        .reset          (reset),
+        
+        .ex_result_i    (ex_result_calc),
+        .write_data_i   (ex_write_data_calc),
+        .dest_reg_sel_i (ex_rd),
+        .alu_op_i       (ex_alu_op),
+        .mem_write_i    (ex_mem_write && !stall), // prevent storing to memory on stalls
+        .mem_read_i     (ex_mem_read && !stall),
+        .mem_to_reg_i   (ex_mem_to_reg),
+        .alu_to_reg_i   (ex_alu_to_reg),
+        .stall          (stall),
 
-	// -----------------
-	// EX → PIPE
-	// -----------------
-	.alu_operand1 	(alu_operand1),
-	.alu_operand2 	(alu_operand2),
-	.write_address	(write_address),
-	.branch_stall 	(branch_stall),
-	.next_pc      (next_pc),
-	.branch_taken 	(branch_taken),
+        .ex_result_o    (mem_ex_result),
+        .write_data_o   (mem_write_data),
+        .dest_reg_sel_o (mem_rd),
+        .alu_op_o       (mem_alu_op),
+        .mem_write_o    (mem_mem_write),
+        .mem_read_o     (mem_mem_read),
+        .mem_to_reg_o   (mem_mem_to_reg),
+        .alu_to_reg_o   (mem_alu_to_reg)
+    );
 
-	// -----------------
-	// EX → WB
-	// -----------------
-	// ---- TODO: Connect EX → WB signals ----
-	.wb_result           (wb_result),
-	.wb_mem_write        (wb_mem_write),
-	.wb_alu_to_reg       (wb_alu_to_reg),
-	.wb_dest_reg_sel     (wb_dest_reg_sel),
-	.wb_branch           (wb_branch),
-	.wb_branch_nxt       (wb_branch_nxt),
-	.wb_mem_to_reg       (wb_mem_to_reg),
-	.wb_read_address     (wb_read_address),
-	.mem_alu_operation   (wb_alu_operation)
-);
+    mem_stage u_mem_stage (
+        .ex_result_i        (mem_ex_result),
+        .write_data_i       (mem_write_data),
+        .alu_op_i           (mem_alu_op),
+        .mem_write_i        (mem_mem_write),
+        .mem_read_i         (mem_mem_read),
+        
+        .dmem_read_address  (dmem_read_address),
+        .dmem_read_ready    (dmem_read_ready),
+        
+        .dmem_write_address (dmem_write_address),
+        .dmem_write_ready   (dmem_write_ready),
+        .dmem_write_data    (dmem_write_data),
+        .dmem_write_byte    (dmem_write_byte)
+    );
 
+    mem_wb_reg u_mem_wb_reg (
+        .clk                       (clk),
+        .reset                     (reset),
+        
+        .ex_result_i               (mem_ex_result),
+        .dest_reg_sel_i            (mem_rd),
+        .mem_to_reg_i              (mem_mem_to_reg),
+        .alu_to_reg_i              (mem_alu_to_reg),
+        .alu_op_i                  (mem_alu_op),
+        .mem_read_address_offset_i (mem_ex_result[1:0]),
+        .stall                     (stall),
 
+        .ex_result_o               (wb_ex_result),
+        .dest_reg_sel_o            (wb_rd),
+        .mem_to_reg_o              (wb_mem_to_reg),
+        .alu_to_reg_o              (wb_alu_to_reg),
+        .alu_op_o                  (wb_alu_op),
+        .mem_read_address_offset_o (wb_mem_read_offset)
+    );
 
-////////////////////////////////////////////////////////////
-// PC Update Logic
-//
-// On reset:
-// - Set PC = RESET
-//
-// On each clock (if not stalled):
-// - If branch_stall = 1 → hold branch redirect and
-// move sequentially (PC = PC + 4).
-// - Else → update PC with next_pc
-// (this could be normal next or a jump/branch address).
-//
-// stall_read prevents any PC update.
-////////////////////////////////////////////////////////////
-
-always @(posedge clk or negedge reset) begin
-	if (!reset)
-    	fetch_pc <= RESET;
-	else if (!stall_read)
-    	fetch_pc <= branch_stall
-                     	? fetch_pc + 4
-                     	: next_pc;
-end
-
-
-// instantiating Writeback module ----------------------------------
-wb wb_stage (
-   .clk(clk),
-   .reset(reset),
-
-   // -----------------
-   // TODO: Connect WB inputs
-   // -----------------
-   .stall_read_i       (stall_read),
-   .fetch_pc_i         (fetch_pc),
-   .wb_branch_i        (wb_branch),
-   .wb_mem_to_reg_i    (wb_mem_to_reg),
-   .mem_write_i        (mem_write),
-   .write_address_i    (write_address),
-   .alu_operand2_i     (alu_operand2),
-   .alu_operation_i    (alu_operation),
-   .wb_alu_operation_i (wb_alu_operation),
-   .wb_read_address_i  (wb_read_address),
-   .dmem_read_data_i   (dmem_read_data),
-   .dmem_write_valid_i (dmem_write_valid),
-
-   // -----------------
-   // TODO: Connect WB outputs
-   // -----------------
-   .inst_mem_address_o (inst_mem_address),
-   .inst_mem_is_ready_o(inst_mem_is_ready),
-   .wb_stall_o         (wb_stall),
-   .wb_write_address_o (wb_write_address),
-   .wb_write_data_o    (wb_write_data),
-   .wb_write_byte_o    (wb_write_byte),
-   .wb_read_data_o     (wb_read_data),
-   .inst_fetch_pc_o    (inst_fetch_pc),
-   .wb_stall_first_o   (wb_stall_first),
-   .wb_stall_second_o  (wb_stall_second)
-);
-
-assign pc_out = fetch_pc;
+    wb_stage u_wb_stage (
+        .ex_result_i               (wb_ex_result),
+        .dmem_read_data_i          (dmem_read_data_temp),
+        .alu_op_i                  (wb_alu_op),
+        .mem_read_address_offset_i (wb_mem_read_offset),
+        .mem_to_reg_i              (wb_mem_to_reg),
+        
+        .wb_result_o               (wb_result)
+    );
 
 endmodule
