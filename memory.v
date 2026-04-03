@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 module instr_mem (
 	input  wire    	clk,
 	input  wire [31:0] pc, 	// byte address

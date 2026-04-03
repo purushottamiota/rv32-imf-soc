@@ -1,0 +1,4 @@
+WARNING: memory.v:16: $readmemh(imem.hex): Not enough words in the file for the requested range [0:1023].
+VCD info: dumpfile ./pipeline.vcd opened for output.
+WARNING: memory.v:16: $readmemh(imem.hex): Not enough words in the file for the requested range [0:1023].
+tb_pipeline.v:195: $finish called at 1270000 (1ps)

@@ -10,7 +10,7 @@ module mult_div (
     input  wire [2:0]  op,        // 000: MUL, 001: MULH, 010: MULHSU, 011: MULHU, 100: DIV, 101: DIVU, 110: REM, 111: REMU
     
     output reg  [31:0] result,
-    output reg         ready,     // High when calculation is complete. Held until start is deasserted.
+    output wire        ready,     // High when calculation is complete. Held until start is deasserted.
     output wire        busy       // High while calculation is running
 );
 
@@ -36,6 +36,8 @@ module mult_div (
     wire is_upper_mult = (op == 3'b001 || op == 3'b010 || op == 3'b011);
     
     assign busy = (state != STATE_IDLE);
+
+    assign ready = (state == STATE_DONE);
 
     // -----------------------------------------------------------------
     // Combinatorial Pre-calculations (removes internal sequential variables)
@@ -75,7 +77,6 @@ module mult_div (
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
             state   <= STATE_IDLE;
-            ready   <= 1'b0;
             result  <= 32'h0;
             counter <= 6'h0;
             accumulator <= 64'h0;
@@ -86,7 +87,6 @@ module mult_div (
         else begin
             case (state)
                 STATE_IDLE: begin
-                    ready <= 1'b0;
                     if (start) begin
                         counter <= 6'd32;
                         
@@ -176,11 +176,7 @@ module mult_div (
                 end
                 
                 STATE_DONE: begin
-                    ready <= 1'b1;
-                    if (!start) begin
-                        state <= STATE_IDLE; // Wait for handshake release
-                        ready <= 1'b0;
-                    end
+                    state <= STATE_IDLE;
                 end
             endcase
         end
