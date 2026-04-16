@@ -1,6 +1,20 @@
 #include "util.h"
 #include "workload_alu.h"
 
+// Helper for printing unsigned variables
+void print_uint(unsigned int val) {
+    if (val == 0) { print_char('0'); return; }
+    char buf[16];
+    int idx = 0;
+    while (val > 0) {
+        buf[idx++] = (val % 10) + '0';
+        val /= 10;
+    }
+    while (idx > 0) {
+        print_char(buf[--idx]);
+    }
+}
+
 void run_addition() {
     print_string("\r\n--- 1. Addition Workload ---\r\n");
     int a = 100;
@@ -77,63 +91,108 @@ void run_xor() {
     print_string("\r\nExpected: 255\r\n");
 }
 
-void run_multiplication() {
-    print_string("\r\n--- 6. Multiplication Workload ---\r\n");
+void run_signed_multiplication() {
+    print_string("\r\n--- 6. Signed Multiplication Workloads ---\r\n");
+    
     int a = 15;
     int b = 6;
     int c = a * b;
-    print_string("Equation: 15 * 6\r\n");
-    print_string("Result: ");
-    print_int(c);
-    print_string("\r\nExpected: 90\r\n");
+    print_string("Eq: 15 * 6 = "); print_int(c); print_string(" (Exp: 90)\r\n");
 
-    print_string("\r\n--- Edge Case: Multiplication by Zero ---\r\n");
-    int d = 999;
-    int e = 0;
-    int f = d * e;
-    print_string("Equation: 999 * 0\r\n");
-    print_string("Result: ");
-    print_int(f);
-    print_string("\r\nExpected: 0\r\n");
-    
-    print_string("\r\n--- Edge Case: Negative Multiplication ---\r\n");
     int g = -8;
     int h = 9;
     int i = g * h;
-    print_string("Equation: -8 * 9\r\n");
-    print_string("Result: ");
-    print_int(i);
-    print_string("\r\nExpected: -72\r\n");
+    print_string("Eq: -8 * 9 = "); print_int(i); print_string(" (Exp: -72)\r\n");
+    
+    int j = -12;
+    int k = -12;
+    int l = j * k;
+    print_string("Eq: -12 * -12 = "); print_int(l); print_string(" (Exp: 144)\r\n");
+    
+    int d = 999;
+    int e = 0;
+    int f = d * e;
+    print_string("Eq: 999 * 0 = "); print_int(f); print_string(" (Exp: 0)\r\n");
 }
 
-void run_division() {
-    print_string("\r\n--- 7. Division Workload ---\r\n");
+void run_unsigned_multiplication() {
+    print_string("\r\n--- 7. Unsigned Multiplication Workloads ---\r\n");
+    
+    unsigned int a = 40000U;
+    unsigned int b = 50000U;
+    unsigned int c = a * b; // 2,000,000,000 fits in 32-bit uint
+    print_string("Eq: 40000 * 50000 = "); print_uint(c); print_string(" (Exp: 2000000000)\r\n");
+    
+    unsigned int d = 100U;
+    unsigned int e = 200U;
+    unsigned int f = d * e;
+    print_string("Eq: 100 * 200 = "); print_uint(f); print_string(" (Exp: 20000)\r\n");
+}
+
+void run_signed_division() {
+    print_string("\r\n--- 8. Signed Division & Edge Cases ---\r\n");
+    
     int a = 144;
     int b = 12;
     int c = a / b;
-    print_string("Equation: 144 / 12\r\n");
-    print_string("Result: ");
-    print_int(c);
-    print_string("\r\nExpected: 12\r\n");
+    print_string("Eq: 144 / 12 = "); print_int(c); print_string(" (Exp: 12)\r\n");
+    
+    int g = -100;
+    int h = 5;
+    int i = g / h;
+    print_string("Eq: -100 / 5 = "); print_int(i); print_string(" (Exp: -20)\r\n");
 
-    print_string("\r\n--- Edge Case: Division by Zero ---\r\n");
     volatile int d = 50;
     volatile int e = 0;
     int f = d / e;
-    print_string("Equation: 50 / 0\r\n");
-    print_string("Result: ");
-    // Note: RISC-V hardware specification mandates division by zero yields -1
-    print_int(f);
-    print_string("\r\nExpected: -1\r\n");
+    // Note: RISC-V hardware spec: signed div by 0 yields -1
+    print_string("Eq: 50 / 0 = "); print_int(f); print_string(" (Exp: -1 limit)\r\n");
+    
+    // RISC-V edge case: Most negative number divided by -1
+    volatile int max_neg = -2147483647 - 1; // 0x80000000
+    volatile int neg_one = -1;
+    int oflow = max_neg / neg_one;
+    print_string("Eq: -2147483648 / -1 = "); print_int(oflow); print_string(" (Exp: -2147483648 overflow)\r\n");
+}
 
-    print_string("\r\n--- Edge Case: Remainder (Modulo) ---\r\n");
-    volatile int g = 25;
-    volatile int h = 7;
+void run_unsigned_division() {
+    print_string("\r\n--- 9. Unsigned Division & Edge Cases ---\r\n");
+    
+    unsigned int a = 3000000000U;
+    unsigned int b = 3U;
+    unsigned int c = a / b;
+    print_string("Eq: 3000000000 / 3 = "); print_uint(c); print_string(" (Exp: 1000000000)\r\n");
+    
+    volatile unsigned int d = 50U;
+    volatile unsigned int e = 0U;
+    unsigned int f = d / e;
+    // Note: RISC-V hardware spec: unsigned div by 0 yields all 1s (max uint)
+    print_string("Eq: 50U / 0U = "); print_uint(f); print_string(" (Exp: 4294967295 limit)\r\n");
+}
+
+void run_remainders() {
+    print_string("\r\n--- 10. Remainders (Modulo) Workloads ---\r\n");
+    
+    volatile int a = 25;
+    volatile int b = 7;
+    int c = a % b;
+    print_string("Eq: 25 % 7 = "); print_int(c); print_string(" (Exp: 4)\r\n");
+    
+    volatile int d = -25;
+    volatile int e = 7;
+    int f = d % e; 
+    print_string("Eq: -25 % 7 = "); print_int(f); print_string(" (Exp: -4)\r\n");
+    
+    volatile int g = 50;
+    volatile int h = 0;
     int i = g % h;
-    print_string("Equation: 25 % 7\r\n");
-    print_string("Result: ");
-    print_int(i);
-    print_string("\r\nExpected: 4\r\n");
+    // Note: RISC-V hardware spec: REM by 0 yields the dividend
+    print_string("Eq: 50 % 0 = "); print_int(i); print_string(" (Exp: 50 limit)\r\n");
+    
+    volatile unsigned int ua = 3000000000U;
+    volatile unsigned int ub = 7U;
+    unsigned int uc = ua % ub;
+    print_string("Eq: 3000000000U % 7U = "); print_uint(uc); print_string(" (Exp: 4)\r\n");
 }
 
 int main() {
@@ -142,16 +201,21 @@ int main() {
     print_string("============================================\r\n");
     print_string("Execution Started!\r\n");
     
-    // Linearly execute all workloads, exactly like the Assembly test did
+    // Core Arithmetic Workloads
     run_addition();
     run_negative();
     run_sorting();
     run_fibonacci();
     run_xor();
-    run_multiplication();
-    run_division();
     
-    // Full ALU 15-edge-case test
+    // M-Extension (Multiplication/Division/Remainder) Diagnostic
+    run_signed_multiplication();
+    run_unsigned_multiplication();
+    run_signed_division();
+    run_unsigned_division();
+    run_remainders();
+    
+    // Full ALU 15-edge-case test mapped from original ASM logic
     run_alu_diagnostic();
     
     print_string("\r\n============================================\r\n");

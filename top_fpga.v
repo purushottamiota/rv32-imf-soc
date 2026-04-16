@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
 module top_fpga #(
-	parameter IMEMSIZE = 4096,
-	parameter DMEMSIZE = 4096
+	parameter IMEMSIZE = 8192,
+	parameter DMEMSIZE = 8192
 )(
 	input  wire clk,    	// fast board clock (e.g. 100 MHz)
 	input  wire reset,  	// active-low reset
