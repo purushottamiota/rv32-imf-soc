@@ -13,7 +13,6 @@ module ex_stage (
     input  wire        immediate_sel_i,
     input  wire        alu_i,
     input  wire        lui_i,
-    input  wire        auipc_i,
     input  wire        jal_i,
     input  wire        jalr_i,
     input  wire        branch_i,
@@ -21,6 +20,14 @@ module ex_stage (
 
     // RV32M logic
     input  wire        mult_div_en_i,
+    
+    // RV32F logic
+    input  wire        fp_en_i,
+    input  wire        fp_load_i,
+    input  wire        fp_store_i,
+    input  wire [4:0]  fp_funct5_i,
+    input  wire [31:0] fp_rdata1_i,
+    input  wire [31:0] fp_rdata2_i,
     
     // CSR logic
     input  wire        is_csr_i,
@@ -52,6 +59,8 @@ module ex_stage (
     // ----------------------------------------------------
     reg [31:0] fw_operand1;
     reg [31:0] fw_operand2;
+    reg [31:0] fp_fw_operand1;
+    reg [31:0] fp_fw_operand2;
 
     always @(*) begin
         case (forward_a)
@@ -67,9 +76,25 @@ module ex_stage (
             2'b10: fw_operand2 = forward_ex_mem_val;
             default: fw_operand2 = reg_rdata2_i;
         endcase
+        
+        // Similar forwarding approach for FP registers
+        case (forward_a)
+            2'b00: fp_fw_operand1 = fp_rdata1_i;
+            2'b01: fp_fw_operand1 = forward_mem_wb_val;
+            2'b10: fp_fw_operand1 = forward_ex_mem_val;
+            default: fp_fw_operand1 = fp_rdata1_i;
+        endcase
+
+        case (forward_b)
+            2'b00: fp_fw_operand2 = fp_rdata2_i;
+            2'b01: fp_fw_operand2 = forward_mem_wb_val;
+            2'b10: fp_fw_operand2 = forward_ex_mem_val;
+            default: fp_fw_operand2 = fp_rdata2_i;
+        endcase
     end
 
-    assign write_data_out = fw_operand2;
+    // Use fp_fw_operand2 for write data during an FP Store
+    assign write_data_out = fp_store_i ? fp_fw_operand2 : fw_operand2;
 
     wire [31:0] alu_operand1 = fw_operand1;
     wire [31:0] alu_operand2 = immediate_sel_i ? immediate_i : fw_operand2;
@@ -96,8 +121,25 @@ module ex_stage (
         .busy     (mult_div_busy)
     );
 
+    // ----------------------------------------------------
+    // FPU Setup
+    // ----------------------------------------------------
+    wire [31:0] fpu_result_val;
+    wire        stall_fpu;
+    
+    fpu u_fpu (
+        .clk        (clk),
+        .reset      (reset),
+        .a          (fp_fw_operand1),
+        .b          (fp_fw_operand2),
+        .funct5     (fp_funct5_i),
+        .fp_en      (fp_en_i),
+        .result     (fpu_result_val),
+        .stall_fpu  (stall_fpu)
+    );
+
     // Hazard Unit freezes pipeline if we need to wait
-    assign stall_ex_request = mult_div_en_i && !mult_div_ready;
+    assign stall_ex_request = (mult_div_en_i && !mult_div_ready) || stall_fpu;
 
     // ----------------------------------------------------
     // Calculate next PC / branch
@@ -173,11 +215,11 @@ module ex_stage (
         else if (lui_i) begin
             ex_result = immediate_i;
         end
-        else if (auipc_i) begin
-            ex_result = pc_i + immediate_i;
-        end
         else if (is_csr_i) begin
             ex_result = csr_rdata_i; // Output old CSR value to rd
+        end
+        else if (fp_en_i) begin
+            ex_result = fpu_result_val; // RV32F ALu result
         end
         else if (mult_div_en_i) begin
             ex_result = mult_div_result_val; // RV32M result
@@ -196,7 +238,7 @@ module ex_stage (
             endcase
         end
         else begin
-            // LOAD or STORE addresses
+            // LOAD or STORE addresses (even for FP, the base address is integer register)
             ex_result = alu_operand1 + immediate_i;
         end
     end

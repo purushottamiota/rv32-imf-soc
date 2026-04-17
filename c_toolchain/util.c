@@ -36,3 +36,12 @@ void print_int(int val) {
         print_char(buf[--idx]);
     }
 }
+
+void print_hex(unsigned int val) {
+    print_string("0x");
+    for (int i = 7; i >= 0; i--) {
+        int nibble = (val >> (i * 4)) & 0xF;
+        if (nibble < 10) print_char('0' + nibble);
+        else print_char('A' + (nibble - 10));
+    }
+}

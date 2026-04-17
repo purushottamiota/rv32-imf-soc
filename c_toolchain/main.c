@@ -195,6 +195,46 @@ void run_remainders() {
     print_string("Eq: 3000000000U % 7U = "); print_uint(uc); print_string(" (Exp: 4)\r\n");
 }
 
+void run_fpu_diagnostic() {
+    print_string("\r\n--- 11. FPU (RV32F) Hardware Math Tests ---\r\n");
+    
+    // Test native compiler float logic (triggers fadd.s under the hood)
+    volatile float a = 2.5f;
+    volatile float b = 3.5f;
+    float c = a + b;
+    unsigned int *c_bits = (unsigned int*)&c;
+    print_string("Eq: 2.5 + 3.5 = "); print_hex(*c_bits); print_string(" (Exp: 0x40C00000 -> 6.0f)\r\n");
+    
+    // Subtraction
+    volatile float s1 = 15.0f;
+    volatile float s2 = 4.5f;
+    float s3 = s1 - s2;
+    unsigned int *s3_bits = (unsigned int*)&s3;
+    print_string("Eq: 15.0 - 4.5 = "); print_hex(*s3_bits); print_string(" (Exp: 0x41280000 -> 10.5f)\r\n");
+
+    // Multiplication
+    volatile float m1 = 1.5f;
+    volatile float m2 = 3.0f;
+    float m3 = m1 * m2;
+    unsigned int *m3_bits = (unsigned int*)&m3;
+    print_string("Eq: 1.5 * 3.0 = "); print_hex(*m3_bits); print_string(" (Exp: 0x40900000 -> 4.5f)\r\n");
+    
+    // Division
+    volatile float d1 = 100.0f;
+    volatile float d2 = 8.0f;
+    float d3 = d1 / d2;
+    unsigned int *d3_bits = (unsigned int*)&d3;
+    print_string("Eq: 100.0 / 8.0 = "); print_hex(*d3_bits); print_string(" (Exp: 0x41480000 -> 12.5f)\r\n");
+    
+    // Sqrt 
+    // Emitting explicitly to ensure it utilizes the fsqrt.s instruction
+    volatile float sq_in = 625.0f;
+    float sq_out;
+    __asm__ volatile ("fsqrt.s %0, %1" : "=f" (sq_out) : "f" (sq_in));
+    unsigned int *sq_out_bits = (unsigned int*)&sq_out;
+    print_string("Eq: sqrt(625.0) = "); print_hex(*sq_out_bits); print_string(" (Exp: 0x41C80000 -> 25.0f)\r\n");
+}
+
 int main() {
     print_string("\r\n\r\n============================================\r\n");
     print_string("   RISC-V SOC AUTOMATED DIAGNOSTIC RUN\r\n");
@@ -214,6 +254,9 @@ int main() {
     run_signed_division();
     run_unsigned_division();
     run_remainders();
+    
+    // RV32F
+    run_fpu_diagnostic();
     
     // Full ALU 15-edge-case test mapped from original ASM logic
     run_alu_diagnostic();

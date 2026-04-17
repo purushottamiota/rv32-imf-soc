@@ -2,6 +2,7 @@
 
 `define OPCODE      6:0
 `define FUNC3       14:12
+`define FUNC5       31:27
 `define SUBTYPE     30
 `define RD          11:7
 `define RS1         19:15
@@ -19,7 +20,10 @@ localparam  [ 6: 0] LUI     = 7'b0110111,        // U-type
                     LOAD    = 7'b0000011,        // I-type
                     STORE   = 7'b0100011,        // S-type
                     ARITHI  = 7'b0010011,        // I-type
-                    ARITHR  = 7'b0110011;        // R-type
+                    ARITHR  = 7'b0110011,        // R-type
+                    LOAD_FP = 7'b0000111,        // I-type (FP Load)
+                    STORE_FP= 7'b0100111,        // S-type (FP Store)
+                    OP_FP   = 7'b1010011;        // R-type (FP ALU)
 
 
 
@@ -72,3 +76,19 @@ localparam  [ 2: 0] PRIV    = 3'b000,
                     CSRRWI  = 3'b101,
                     CSRRSI  = 3'b110,
                     CSRRCI  = 3'b111;
+
+// FUNC5 for RV32F (F-Extension) - INST[31:27]
+localparam  [ 4: 0] FADD_S   = 5'b00000,
+                    FSUB_S   = 5'b00001,
+                    FMUL_S   = 5'b00010,
+                    FDIV_S   = 5'b00011,
+                    FSQRT_S  = 5'b01011,
+                    FCVT_W_S = 5'b11000,
+                    FCVT_S_W = 5'b11010,
+                    FMV_X_W  = 5'b11100,
+                    FMV_W_X  = 5'b11110,
+                    FCMP_S   = 5'b10100;
+
+// FUNC3 for RV32F (Loads/Stores) - INST[14:12]
+localparam  [ 2: 0] FLW_FSW  = 3'b010;
+
