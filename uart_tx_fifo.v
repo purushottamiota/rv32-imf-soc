@@ -35,6 +35,13 @@ module uart_tx_fifo #(
     assign empty = (write_ptr == read_ptr);
     assign full  = (write_ptr[ADDR_WIDTH] != read_ptr[ADDR_WIDTH]) && 
                    (write_ptr[ADDR_WIDTH-1:0] == read_ptr[ADDR_WIDTH-1:0]);
+
+    initial begin
+        if ((DEPTH & (DEPTH - 1)) != 0) begin
+            $display("ERROR: uart_tx_fifo DEPTH must be a power of 2.");
+            $finish;
+        end
+    end
                    
     // Write Logic
     always @(posedge clk) begin
