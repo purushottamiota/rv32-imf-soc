@@ -1,9 +1,23 @@
 #include "util.h"
 #include "workload_alu.h" // Include the automated tests
 
-void c_trap_handler() {
-    print_string("\r\n[HARDWARE EXCEPTION]: Math/Div-By-Zero Fault Evaluated.\r\n");
-    print_string("Rebooting CPU...\r\n");
+// Accept the mcause CSR value passed from start.S
+void c_trap_handler(unsigned int cause) {
+    print_string("\r\n=========================================\r\n");
+    print_string("[HARDWARE EXCEPTION] TRAP INTERCEPTED\r\n");
+    print_string("=========================================\r\n");
+    
+    print_string("MCAUSE Code: ");
+    print_int(cause);
+    
+    // Check for our custom divide-by-zero code (24)
+    if (cause == 24) {
+        print_string(" -> Math/Div-By-Zero Fault Evaluated.\r\n");
+    } else {
+        print_string(" -> Unknown Hardware Fault.\r\n");
+    }
+    
+    print_string("Advancing Program Counter and Resuming...\r\n\r\n");
 }
 
 int strcmp(const char* s1, const char* s2) {
