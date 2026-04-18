@@ -17,7 +17,8 @@ module fpu(
 );
     `include "opcode.vh"
     
-    localparam IDLE=0, ALIGN=1, DO_ADD=2, ITERATE=3, NORMALIZE=4, PACK=5;
+    // FIX: Added DONE_STATE=6 to break the stall deadlock
+    localparam IDLE=0, ALIGN=1, DO_ADD=2, ITERATE=3, NORMALIZE=4, PACK=5, DONE_STATE=6;
     reg [2:0] state;
     
     reg [31:0] final_res;
@@ -43,7 +44,7 @@ module fpu(
     wire [25:0] div_upper   = div_shifted[51:26];
     wire        div_sub_ok  = (div_upper >= iter_div);
 
-    // --- YOUR CUSTOM FCVT.S.W BYPASS ---
+    // --- CUSTOM FCVT.S.W BYPASS ---
     reg [31:0] cvt_sw_result;
     reg [31:0] abs_val;
     reg        cvt_sign;
@@ -82,8 +83,8 @@ module fpu(
                     if (fp_en && !computing && funct5 != FCVT_S_W && funct5 != FCMP_S) begin
                         computing <= 1;
                         if (funct5 == FADD_S || funct5 == FSUB_S) begin
-                            if (a[30:0] == 0) begin final_res <= {sign_b, b[30:0]}; computing <= 0; end
-                            else if (b[30:0] == 0) begin final_res <= a; computing <= 0; end
+                            if (a[30:0] == 0) begin final_res <= {sign_b, b[30:0]}; state <= DONE_STATE; end
+                            else if (b[30:0] == 0) begin final_res <= a; state <= DONE_STATE; end
                             else begin exp_res <= exp_a; mant_res <= {23'b0, mant_a}; iter_div <= mant_b; state <= ALIGN; end
                         end 
                         else if (funct5 == FMUL_S) begin
@@ -91,7 +92,7 @@ module fpu(
                             mant_res <= {1'b1, a[22:0]} * {1'b1, b[22:0]}; state <= NORMALIZE;
                         end
                         else if (funct5 == FDIV_S) begin
-                            if (b[30:0] == 0) begin final_res <= 32'h7F800000; final_exc <= 1; computing <= 0; end
+                            if (b[30:0] == 0) begin final_res <= 32'h7F800000; final_exc <= 1; state <= DONE_STATE; end
                             else begin
                                 sign_res <= sign_a ^ b[31]; exp_res <= exp_a - exp_b + 127;
                                 iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {3'b0, 1'b1, a[22:0], 25'b0};
@@ -134,18 +135,24 @@ module fpu(
                     if (mant_res == 0 || $signed(exp_res) <= 0) final_res <= {sign_res, 31'b0};
                     else if (exp_res >= 255) final_res <= {sign_res, 8'hFF, 23'b0};
                     else final_res <= {sign_res, exp_res[7:0], mant_res[45:23]};
-                    state <= IDLE; computing <= 0;
+                    state <= DONE_STATE; 
+                end
+                
+                DONE_STATE: begin
+                    state <= IDLE;
+                    computing <= 0;
                 end
             endcase
-            if (!computing) final_exc <= 0;
+            
+            if (!computing && state != DONE_STATE) final_exc <= 0;
         end
     end
 
     wire is_multi_cycle = (funct5 == FADD_S || funct5 == FSUB_S || funct5 == FMUL_S || funct5 == FDIV_S || funct5 == FSQRT_S);
     
-    assign stall_fpu = (fp_en && is_multi_cycle && computing) || (fp_en && is_multi_cycle && state == IDLE);
+    // FIX: The stall completely drops when we reach DONE_STATE, allowing the pipeline to advance
+    assign stall_fpu = (fp_en && is_multi_cycle && state != DONE_STATE);
     
-    // Route combinational bypass for FCVT_S_W and FCMP, else output state machine result
     assign result = (fp_en && funct5 == FCVT_S_W) ? cvt_sw_result : 
                     (fp_en && funct5 == FCMP_S)   ? {31'b0, (funct3 == 3'b010 ? (a == b) : ($signed(a) < $signed(b)))} : 
                     final_res;
