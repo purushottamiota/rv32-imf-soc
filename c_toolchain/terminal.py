@@ -3,6 +3,7 @@ import sys
 import os
 import struct
 import threading
+import time
 
 if len(sys.argv) < 2:
     print("Usage: python terminal.py <COM_PORT> [log_file.txt]")
@@ -32,30 +33,28 @@ while padded_size % 4 != 0:
 
 print(f"Loading {bin_path} ({file_size} bytes -> Padded: {padded_size} bytes)...")
 
-# --- FIX: ACTUALLY PAD THE PAYLOAD ARRAY ---
+# Read the actual file first!
+with open(bin_path, 'rb') as f:
+    payload = f.read()
+
+# Pad the payload array with zeroes to reach a 4-byte alignment
 padding_bytes = padded_size - file_size
 if padding_bytes > 0:
-    payload += b'\x00' * padding_bytes
-# -------------------------------------------
+    payload += (b'\x00' * padding_bytes)
 
 # Write Header (DEADBEEF)
 ser.write(bytes([0xDE, 0xAD, 0xBE, 0xEF]))
+
 # Write Size (Little Endian 32-bit)
 ser.write(struct.pack('<I', padded_size))
 
 # Write Payload in chunks to prevent FTDI buffer overflow
-import time
-with open(bin_path, 'rb') as f:
-    payload = f.read()
-    payload += bytes(padded_size - file_size) # Pack empty zeros
-    
-    # Send in 256-byte chunks with a tiny delay
-    chunk_size = 256
-    for i in range(0, len(payload), chunk_size):
-        chunk = payload[i:i+chunk_size]
-        ser.write(chunk)
-        # Wait 5ms between chunks
-        time.sleep(0.005)
+chunk_size = 256
+for i in range(0, len(payload), chunk_size):
+    chunk = payload[i:i+chunk_size]
+    ser.write(chunk)
+    # Wait 5ms between chunks to let the FPGA bootloader catch up
+    time.sleep(0.005)
 
 print("Payload dispatched successfully. Dropping into interactive shell...")
 print("==========================================================")
