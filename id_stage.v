@@ -59,7 +59,7 @@ module id_stage (
     assign lui          = (opcode == LUI);
     assign auipc        = (opcode == AUIPC);
     assign jal          = (opcode == JAL);
-    assign jalr         (opcode == JALR) || is_mret;
+    assign jalr         = (opcode == JALR) || is_mret;
     assign branch       = (opcode == BRANCH);
     assign mem_write    = (opcode == STORE) || (opcode == STORE_FP);
     assign mem_read     = (opcode == LOAD) || (opcode == LOAD_FP);
