@@ -165,7 +165,15 @@ module ex_stage (
         end
         else if (jalr_i) begin
             branch_taken  = 1'b1;
-            branch_target = (alu_operand1 + immediate_i) & ~32'd1;
+            
+            // Catch the hijacked MRET instruction!
+            // Normal JALR doesn't assert is_csr, so this combination uniquely identifies MRET.
+            if (is_csr_i) begin
+                branch_target = csr_rdata_i; // Jump to the value held in MEPC!
+            end else begin
+                branch_target = (alu_operand1 + immediate_i) & ~32'd1; // Normal JALR
+            end
+            
         end
         else if (branch_i) begin
             branch_target = pc_i + immediate_i;

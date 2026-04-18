@@ -46,6 +46,10 @@ module id_stage (
     wire [6:0] opcode   = instruction_i[`OPCODE];
 
     // Control signals
+
+    // Detect the MRET instruction (System Opcode + PRIV Funct3 + 0x302 Immediate)
+    wire is_mret        = (opcode == SYSTEM) && (alu_op == PRIV) && (instruction_i[31:20] == 12'h302);
+
     assign fp_en        = (opcode == OP_FP);
     assign fp_load      = (opcode == LOAD_FP);
     assign fp_store     = (opcode == STORE_FP);
@@ -55,7 +59,7 @@ module id_stage (
     assign lui          = (opcode == LUI);
     assign auipc        = (opcode == AUIPC);
     assign jal          = (opcode == JAL);
-    assign jalr         = (opcode == JALR);
+    assign jalr         (opcode == JALR) || is_mret;
     assign branch       = (opcode == BRANCH);
     assign mem_write    = (opcode == STORE) || (opcode == STORE_FP);
     assign mem_read     = (opcode == LOAD) || (opcode == LOAD_FP);
@@ -63,8 +67,8 @@ module id_stage (
     assign arithsubtype = instruction_i[`SUBTYPE] && !(opcode == ARITHI && alu_op == ADD);
 
     assign mult_div_en  = (opcode == ARITHR) && (instruction_i[31:25] == 7'b0000001);
-    assign is_csr       = (opcode == SYSTEM) && (alu_op != PRIV);
-    assign csr_addr     = instruction_i[31:20];
+    assign is_csr       = ((opcode == SYSTEM) && (alu_op != PRIV)) || is_mret;
+    assign csr_addr     = is_mret ? 12'h341 : instruction_i[31:20];
 
     assign fp_writes_int = (opcode == OP_FP) && 
                            (fp_funct5 == 5'b10100 || fp_funct5 == 5'b11000 || fp_funct5 == 5'b11100);

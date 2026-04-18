@@ -259,13 +259,7 @@ module pipe #(
     // ----------------------------------------------------
     // CSR File
     // ----------------------------------------------------
-   // 1. Create a custom wire to generate the Exception Cause Code
-    // We will use '24' for Div-By-Zero.
-    wire [31:0] trap_cause = ex_div_zero_fault ? 32'd24 : 32'd0;
 
-    // 2// ----------------------------------------------------
-    // CSR File
-    // ----------------------------------------------------
     csr_file u_csr_file (
         .clk              (clk),
         .reset            (reset),
@@ -459,7 +453,7 @@ module pipe #(
         .csr_wdata          (ex_csr_wdata)
     );
 
-    wire ex_alu_to_reg = (ex_alu | ex_lui | ex_jal | ex_jalr | ex_mem_to_reg | ex_is_csr | ex_mult_div_en | ex_fp_en);
+   
 
     ex_mem_reg u_ex_mem_reg (
         .clk            (clk),
