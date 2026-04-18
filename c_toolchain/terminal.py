@@ -32,6 +32,12 @@ while padded_size % 4 != 0:
 
 print(f"Loading {bin_path} ({file_size} bytes -> Padded: {padded_size} bytes)...")
 
+# --- FIX: ACTUALLY PAD THE PAYLOAD ARRAY ---
+padding_bytes = padded_size - file_size
+if padding_bytes > 0:
+    payload += b'\x00' * padding_bytes
+# -------------------------------------------
+
 # Write Header (DEADBEEF)
 ser.write(bytes([0xDE, 0xAD, 0xBE, 0xEF]))
 # Write Size (Little Endian 32-bit)
