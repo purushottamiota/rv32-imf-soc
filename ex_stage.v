@@ -21,7 +21,8 @@ module ex_stage (
     // RV32M logic
     input  wire        mult_div_en_i,
     
-    // RV32F logic
+    // RV32F logic / General Instruction Selectors
+    input  wire [4:0]  rs2_sel_i, // Extracted rs2 field from instruction
     input  wire        fp_en_i,
     input  wire        fp_load_i,
     input  wire        fp_store_i,
@@ -31,7 +32,7 @@ module ex_stage (
     
     // CSR logic
     input  wire        is_csr_i,
-    input  wire [11:0] csr_addr_i,
+    input  wire [11:0] csr_addr_i, // Connected to CSR address decoding logic
     input  wire [31:0] csr_rdata_i, // From global CSR file
 
     // Forwarding logic
@@ -137,6 +138,8 @@ module ex_stage (
         .a              (fp_fw_operand1),
         .b              (fp_fw_operand2),
         .funct5         (fp_funct5_i),
+        .funct3         (alu_op_i),
+        .rs2_sel        (rs2_sel_i),
         .fp_en          (fp_en_i),
         .result         (fpu_result_val),
         .stall_fpu      (stall_fpu),

@@ -46,12 +46,12 @@ module data_mem (
 
 	// Read port
 	input     	re,
-	input  [31:0] raddr,   // byte address
+	input  [31:0] raddr,   // byte address (connected to pipeline fetch stage)
 	output reg [31:0] rdata,
 
 	// Write port
 	input     	we,
-	input  [31:0] waddr,   // byte address
+	input  [31:0] waddr,   // byte address (connected to pipeline writeback stage)
 	input  [31:0] wdata,
 	input  [3:0]  wstrb
 );

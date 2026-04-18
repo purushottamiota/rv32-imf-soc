@@ -1,5 +1,8 @@
 `timescale 1ns/1ps
 // Stage files and hazard unit are compiled natively via Vivado workspace.
+// change is getting reflected
+// hi
+
 
 module pipe #(
 	parameter [31:0] RESET = 32'h0000_0000
@@ -400,6 +403,8 @@ module pipe #(
         .branch_i           (ex_branch),
         .arithsubtype_i     (ex_arithsubtype),
         
+        .rs2_sel_i          (ex_rs2),
+        
         .mult_div_en_i      (ex_mult_div_en),
         .is_csr_i           (ex_is_csr),
         .csr_addr_i         (ex_csr_addr),
@@ -525,5 +530,7 @@ module pipe #(
         
         .wb_result_o               (wb_result)
     );
+
+    // Removed duplicate assignments and redundant fpu_cvt/cmp instantiations.
 
 endmodule

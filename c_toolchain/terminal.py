@@ -51,7 +51,7 @@ with open(bin_path, 'rb') as f:
         # Wait 5ms between chunks
         time.sleep(0.005)
 
-print("✅ Payload dispatched successfully. Dropping into interactive shell...")
+print("Payload dispatched successfully. Dropping into interactive shell...")
 print("==========================================================")
 print("             FPGA HARDWARE CALCULATOR                     ")
 print("==========================================================")
@@ -60,15 +60,19 @@ print("All log output will be saved to: ", log_file_path)
 
 # Step 2: Interactive Terminal + Logger
 def rx_thread():
-    with open(log_file_path, 'a') as logf:
+    with open(log_file_path, 'a', encoding='utf-8') as logf:
         logf.write("\n--- NEW SESSION ---\n")
         while True:
             try:
                 data = ser.read(1024)
                 if data:
                     text = data.decode('utf-8', errors='replace')
-                    sys.stdout.write(text)
-                    sys.stdout.flush()
+                    try:
+                        sys.stdout.write(text)
+                        sys.stdout.flush()
+                    except UnicodeEncodeError:
+                        sys.stdout.write(text.encode('ascii', errors='replace').decode('ascii'))
+                        sys.stdout.flush()
                     logf.write(text)
                     logf.flush()
             except Exception as e:
@@ -88,5 +92,4 @@ try:
             ser.write(clean_line.encode('utf-8'))
 except KeyboardInterrupt:
     print("\nExiting...")
-finally:
-    ser.close()
+    os._exit(0)
