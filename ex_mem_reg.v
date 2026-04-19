@@ -45,7 +45,7 @@ module ex_mem_reg (
     output reg         fp_reg_write_o
 );
 
-    always @(posedge clk or negedge reset) begin
+    always @(posedge clk ) begin
         if (!reset) begin
             ex_result_o    <= 32'h0;
             write_data_o   <= 32'h0;
