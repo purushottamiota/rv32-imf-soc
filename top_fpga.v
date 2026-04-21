@@ -9,7 +9,28 @@ module top_fpga #(
 	input  wire reset,  	// active-low reset
 	input  wire uart_rx,    // UART Receive line
 	output wire uart_tx,    // UART Transmit line
-	output [15:0] led       // Diagnostic LEDs
+	output [15:0] led,       // Diagnostic LEDs
+    
+    // AXI4-Lite Master Interface (Auto-Inferred by Vivado if names match exactly)
+    output wire [31:0] m_axi_awaddr,
+    output wire [2:0]  m_axi_awprot,
+    output wire        m_axi_awvalid,
+    input  wire        m_axi_awready,
+    output wire [31:0] m_axi_wdata,
+    output wire [3:0]  m_axi_wstrb,
+    output wire        m_axi_wvalid,
+    input  wire        m_axi_wready,
+    input  wire [1:0]  m_axi_bresp,
+    input  wire        m_axi_bvalid,
+    output wire        m_axi_bready,
+    output wire [31:0] m_axi_araddr,
+    output wire [2:0]  m_axi_arprot,
+    output wire        m_axi_arvalid,
+    input  wire        m_axi_arready,
+    input  wire [31:0] m_axi_rdata,
+    input  wire [1:0]  m_axi_rresp,
+    input  wire        m_axi_rvalid,
+    output wire        m_axi_rready
 );
 
 	wire [31:0] current_pc;
@@ -23,20 +44,11 @@ module top_fpga #(
 	wire [31:0] boot_addr;
 	wire [31:0] boot_wdata;
 
-    // --- CLOCK DIVIDER TO 50MHz ---
-    // Safely resolves the -1.765ns Setup Timing Violation on the long 
-    // Is_uart_read_r -> mem_read_data -> FW -> EX -> Branch -> Flush -> Pipeline_CE path.
-    reg clk_50 = 0;
-    always @(posedge clk or negedge reset) begin
-        if (!reset) clk_50 <= 1'b0;
-        else clk_50 <= ~clk_50;
-    end
-    
-    wire cpu_clk;
-    BUFG bufg_inst (
-        .I(clk_50),
-        .O(cpu_clk)
-    );
+    // --- CLOCKING ---
+    // The previous clk_50 generation has been removed. We now assume `clk` 
+    // is driven directly from an external MMCM/PLL (e.g., at 50MHz) to ensure 
+    // minimal clock skew across the AXI network and CPU logic.
+    wire cpu_clk = clk;
 
 	////////////////////////////////////////////////////////////
 	// PIPE ↔ MEMORY WIRES
@@ -60,9 +72,13 @@ module top_fpga #(
 
 	////////////////////////////////////////////////////////////
 	// MEMORY MAPPED I/O (UART) at 0x8000_0000
+    // AXI4-Lite Master at 0x4000_0000
 	////////////////////////////////////////////////////////////
     // Intercept RAM accesses if address starts with 8 (0x8000...)
     wire is_uart_addr  = (dmem_read_address[31:28] == 4'h8) || (dmem_write_address[31:28] == 4'h8);
+    // Intercept accesses for AXI4-Lite if address starts with 4 (0x4000...)
+    wire is_axi_addr   = (dmem_read_address[31:28] == 4'h4) || (dmem_write_address[31:28] == 4'h4);
+
     wire uart_we       = is_uart_addr && dmem_write_ready;
     wire uart_re       = is_uart_addr && dmem_read_ready;
     
@@ -80,10 +96,12 @@ module top_fpga #(
     // Read Multiplexer (Synchronized to exactly match BRAM's 1-cycle latency)
     reg [31:0] uart_read_data_r;
     reg        is_uart_read_r;
+    reg        is_axi_read_r;
     
     always @(posedge cpu_clk) begin
-        // Carry the UART-read state into the Write-Back stage cycle
+        // Carry the UART/AXI-read state into the Write-Back stage cycle
         is_uart_read_r <= uart_re;
+        is_axi_read_r  <= is_axi_addr && dmem_read_ready;
         
         // Sample the UART Hardware wires dynamically exactly when a Read is requested
         if (uart_re) begin
@@ -92,8 +110,12 @@ module top_fpga #(
         end
     end
     
-    // During the pipeline WB stage, output either the safely latched UART data, or native BRAM data.
-    assign dmem_read_data_pipe = is_uart_read_r ? uart_read_data_r : dmem_read_data_bram;
+    wire [31:0] axi_rdata_out;
+    
+    // During the pipeline WB stage, output either the safely latched UART data, AXI data, or native BRAM data.
+    assign dmem_read_data_pipe = is_uart_read_r ? uart_read_data_r : 
+                                 is_axi_read_r  ? axi_rdata_out : 
+                                 dmem_read_data_bram;
 
     // LED mappings! Top 8 bits = Most recently received character. Bottom 8 bits = Current PC.
     reg [7:0] led_upper;
@@ -137,12 +159,49 @@ module top_fpga #(
 	);
 
 	////////////////////////////////////////////////////////////
+	// AXI4-LITE MASTER CONTROLLER
+	////////////////////////////////////////////////////////////
+    wire axi_busy;
+    
+    axi4_lite_master axi_master_inst (
+        .clk           (cpu_clk),
+        .reset         (reset), // Active low reset standard
+        .req_enable    (is_axi_addr && (dmem_read_ready || dmem_write_ready)),
+        .req_write     (dmem_write_ready),
+        .req_addr      (dmem_write_ready ? dmem_write_address : dmem_read_address),
+        .req_wdata     (dmem_write_data),
+        .req_wstrb     (dmem_write_byte),
+        .axi_busy      (axi_busy),
+        .axi_rdata     (axi_rdata_out),
+        
+        .m_axi_awaddr  (m_axi_awaddr),
+        .m_axi_awprot  (m_axi_awprot),
+        .m_axi_awvalid (m_axi_awvalid),
+        .m_axi_awready (m_axi_awready),
+        .m_axi_wdata   (m_axi_wdata),
+        .m_axi_wstrb   (m_axi_wstrb),
+        .m_axi_wvalid  (m_axi_wvalid),
+        .m_axi_wready  (m_axi_wready),
+        .m_axi_bresp   (m_axi_bresp),
+        .m_axi_bvalid  (m_axi_bvalid),
+        .m_axi_bready  (m_axi_bready),
+        .m_axi_araddr  (m_axi_araddr),
+        .m_axi_arprot  (m_axi_arprot),
+        .m_axi_arvalid (m_axi_arvalid),
+        .m_axi_arready (m_axi_arready),
+        .m_axi_rdata_in(m_axi_rdata),
+        .m_axi_rresp   (m_axi_rresp),
+        .m_axi_rvalid  (m_axi_rvalid),
+        .m_axi_rready  (m_axi_rready)
+    );
+
+	////////////////////////////////////////////////////////////
 	// PIPELINE CPU
 	////////////////////////////////////////////////////////////
 	pipe pipe_u (
-		.clk               (cpu_clk), // Now properly running 50MHz to easily clear timing bounds!
+		.clk               (cpu_clk), // Driven direct from top port clk
 		.reset             (cpu_reset),
-		.stall             (1'b0),
+		.stall             (axi_busy), // Freezes CPU cleanly when AXI peripheral is active
 		.exception         (exception),
 		.pc_out            (current_pc), 
 		.inst_mem_address  (inst_mem_address),
@@ -185,14 +244,14 @@ module top_fpga #(
     // via $readmemh and the CPU reads garbage for every string / constant.
     // The CPU is held in reset while boot_we pulses, so the two producers of
     // these write signals are mutually exclusive.
-    wire bram_we           = boot_we || (dmem_write_ready && !is_uart_addr);
+    wire bram_we           = boot_we || (dmem_write_ready && !is_uart_addr && !is_axi_addr);
     wire [31:0] bram_waddr = boot_we ? boot_addr  : dmem_write_address;
     wire [31:0] bram_wdata = boot_we ? boot_wdata : dmem_write_data;
     wire [3:0]  bram_wstrb = boot_we ? 4'b1111    : dmem_write_byte;
 
 	data_mem DMEM (
 		.clk   (cpu_clk), // DMEM stays at 50MHz to match pipeline
-		.re    (dmem_read_ready && !is_uart_addr), 
+		.re    (dmem_read_ready && !is_uart_addr && !is_axi_addr), 
 		.raddr (dmem_read_address),
 		.rdata (dmem_read_data_bram), 
 		.we    (bram_we),

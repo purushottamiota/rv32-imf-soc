@@ -1,7 +1,7 @@
 CC = riscv-none-elf-gcc
 OBJCOPY = riscv-none-elf-objcopy
 
-CFLAGS = -O2 -march=rv32imf -mabi=ilp32 -ffreestanding -nostdlib -mcmodel=medany
+CFLAGS = -O2 -march=rv32imf -mabi=ilp32 -ffp-contract=off -ffreestanding -nostdlib -mcmodel=medany -Wl,--no-warn-rwx-segments
 
 SRCS = start.S main.c util.c workload_alu.c
 
