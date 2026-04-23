@@ -1,2 +1,6 @@
 *.vcd
 *.vvp
+*.log 
+*.tcl
+*.out
+*.dump

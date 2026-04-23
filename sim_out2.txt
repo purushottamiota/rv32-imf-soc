@@ -1,0 +1,14 @@
+WARNING: memory.v:21: $readmemh(imem.hex): Not enough words in the file for the requested range [0:2047].
+WARNING: memory.v:61: $readmemh(dmem.hex): Not enough words in the file for the requested range [0:2047].
+=== cycle 0 | PC=00000000 | cord_busy=0 sys_busy=0 ===
+=== cycle 200000 | PC=00000480 | cord_busy=0 sys_busy=0 ===
+=== cycle 400000 | PC=0000047c | cord_busy=0 sys_busy=0 ===
+=== cycle 600000 | PC=00000484 | cord_busy=0 sys_busy=0 ===
+=== cycle 800000 | PC=0000047c | cord_busy=0 sys_busy=0 ===
+=== cycle 1000000 | PC=00000478 | cord_busy=0 sys_busy=0 ===
+=== cycle 1200000 | PC=00000480 | cord_busy=0 sys_busy=0 ===
+=== cycle 1400000 | PC=0000047c | cord_busy=0 sys_busy=0 ===
+=== cycle 1600000 | PC=00000474 | cord_busy=0 sys_busy=0 ===
+=== cycle 1800000 | PC=0000047c | cord_busy=0 sys_busy=0 ===
+Sim ended at cycle=2000000 PC=00000478
+tb_quick.v:72: $finish called at 20000050000 (1ps)
