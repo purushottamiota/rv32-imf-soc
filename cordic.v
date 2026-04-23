@@ -84,7 +84,8 @@ module cordic_iterative (
                 STATE_IDLE: begin
                     valid_out <= 0;
                     if (start) begin
-                        // Quadrant preprocessing: CORDIC converges in [-pi/2, pi/2]
+                        // Quadrant preprocessing: CORDIC converges in [-pi/2, pi/2].
+                        // For angles outside this range, fold by pi and negate outputs.
                         if ($signed(target_angle) > PI_OVER_2) begin
                             z <= $signed(target_angle) - PI;
                             flip_signs <= 1'b1;
@@ -95,7 +96,6 @@ module cordic_iterative (
                             z <= target_angle;
                             flip_signs <= 1'b0;
                         end
-                        
                         x <= CORDIC_GAIN_INV;
                         y <= 32'sd0;
                         iteration <= 5'd0;

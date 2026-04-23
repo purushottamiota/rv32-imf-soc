@@ -5,7 +5,7 @@ CFLAGS = -O2 -march=rv32imf -mabi=ilp32 -ffp-contract=off -ffreestanding -nostdl
 
 # Default values if not provided by user
 FILE ?= c_toolchain/main.c
-COM ?= COM4
+COM ?= COM6
 
 # The bare-metal environment needs the initialization script and utility functions
 SRCS = c_toolchain/start.S $(FILE) c_toolchain/util.c c_toolchain/workload_alu.c

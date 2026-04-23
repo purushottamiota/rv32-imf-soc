@@ -160,6 +160,17 @@ module axi_systolic_4x4 #(
             wf_row3_d1 <= act_reg[3]; wf_row3_d2 <= wf_row3_d1; wf_row3_d3 <= wf_row3_d2;
         end
     end
+
+    // Accumulators to capture result as they slide out
+    reg [31:0] final_out_0, final_out_1, final_out_2, final_out_3;
+    reg step_trigger_d1;
+    always @(posedge clk) begin
+        if (!reset) begin
+            step_trigger_d1 <= 0;
+        end else begin
+            step_trigger_d1 <= step_trigger;
+        end
+    end
     
     wire [31:0] psum_out_0, psum_out_1, psum_out_2, psum_out_3;
     
@@ -178,6 +189,10 @@ module axi_systolic_4x4 #(
         .psum_out_0(psum_out_0), .psum_out_1(psum_out_1), .psum_out_2(psum_out_2), .psum_out_3(psum_out_3)
     );
 
+    reg aw_en;
+    reg w_en;
+    reg [31:0] waddr_latched;
+
     // AXI WRITE logic
     always @(posedge clk) begin
         step_trigger <= 0;
@@ -186,26 +201,54 @@ module axi_systolic_4x4 #(
             s_axi_awready <= 0;
             s_axi_wready <= 0;
             s_axi_bvalid <= 0;
+            aw_en <= 0;
+            w_en <= 0;
+            waddr_latched <= 0;
+            final_out_0 <= 0; final_out_1 <= 0; final_out_2 <= 0; final_out_3 <= 0;
             // Initialize memory arrays minimally
         end else begin
-            if (s_axi_awvalid && !s_axi_awready) s_axi_awready <= 1;
-            else s_axi_awready <= 0;
+            // Handshake AW
+            if (s_axi_awvalid && !s_axi_awready && !aw_en) begin
+                s_axi_awready <= 1;
+                aw_en <= 1;
+                waddr_latched <= s_axi_awaddr;
+            end else if (s_axi_awready) begin
+                s_axi_awready <= 0;
+            end
 
-            if (s_axi_wvalid && !s_axi_wready) s_axi_wready <= 1;
-            else s_axi_wready <= 0;
+            // Handshake W
+            if (s_axi_wvalid && !s_axi_wready && !w_en) begin
+                s_axi_wready <= 1;
+                w_en <= 1;
+            end else if (s_axi_wready) begin
+                s_axi_wready <= 0;
+            end
             
-            // Perform actual memory write mapped at 0x5... base
-            if (s_axi_wvalid && s_axi_wready && s_axi_awvalid && s_axi_awready) begin
-                if (s_axi_awaddr[7:0] >= 8'h00 && s_axi_awaddr[7:0] <= 8'h3C) begin
-                    weight_reg[s_axi_awaddr[7:0] >> 2] <= s_axi_wdata; // Write Weights
-                end else if (s_axi_awaddr[7:0] >= 8'h40 && s_axi_awaddr[7:0] <= 8'h4C) begin
-                    act_reg[(s_axi_awaddr[7:0] - 8'h40) >> 2] <= s_axi_wdata; // Write Activations
-                end else if (s_axi_awaddr[7:0] == 8'h50) begin
+            // Capture results one cycle after step_trigger
+            if (step_trigger_d1) begin
+                final_out_0 <= psum_out_0;
+                final_out_1 <= psum_out_1;
+                final_out_2 <= psum_out_2;
+                final_out_3 <= psum_out_3;
+            end
+
+            // Perform actual memory write mapped at 0x5... base when BOTH latched
+            if (aw_en && w_en && !s_axi_bvalid) begin
+                if (waddr_latched[7:0] >= 8'h00 && waddr_latched[7:0] <= 8'h3C) begin
+                    weight_reg[waddr_latched[7:0] >> 2] <= s_axi_wdata; // Write Weights
+                end else if (waddr_latched[7:0] >= 8'h40 && waddr_latched[7:0] <= 8'h4C) begin
+                    act_reg[(waddr_latched[7:0] - 8'h40) >> 2] <= s_axi_wdata; // Write Activations
+                    if (waddr_latched[7:0] == 8'h40) begin
+                        final_out_0 <= 0; final_out_1 <= 0; final_out_2 <= 0; final_out_3 <= 0;
+                    end
+                end else if (waddr_latched[7:0] == 8'h50) begin
                     step_trigger <= 1; // Trigger One Step Pulse
                 end
                 
                 s_axi_bvalid <= 1;
                 s_axi_bresp <= 2'b00;
+                aw_en <= 0;
+                w_en <= 0;
             end else if (s_axi_bvalid && s_axi_bready) s_axi_bvalid <= 0;
         end
     end
@@ -224,10 +267,10 @@ module axi_systolic_4x4 #(
                 s_axi_rresp <= 2'b00;
                 
                 // Decode read output register offset
-                if (s_axi_araddr[7:0] == 8'h60) s_axi_rdata <= psum_out_0;
-                else if (s_axi_araddr[7:0] == 8'h64) s_axi_rdata <= psum_out_1;
-                else if (s_axi_araddr[7:0] == 8'h68) s_axi_rdata <= psum_out_2;
-                else if (s_axi_araddr[7:0] == 8'h6C) s_axi_rdata <= psum_out_3;
+                if (s_axi_araddr[7:0] == 8'h60) s_axi_rdata <= final_out_0;
+                else if (s_axi_araddr[7:0] == 8'h64) s_axi_rdata <= final_out_1;
+                else if (s_axi_araddr[7:0] == 8'h68) s_axi_rdata <= final_out_2;
+                else if (s_axi_araddr[7:0] == 8'h6C) s_axi_rdata <= final_out_3;
                 else s_axi_rdata <= 32'h0;
                 
             end else if (s_axi_rvalid && s_axi_rready) s_axi_rvalid <= 0;

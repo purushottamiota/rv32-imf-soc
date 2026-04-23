@@ -44,13 +44,20 @@ module axi_cordic_slave (
         .cos_out(cordic_cos_out)
     );
 
-    // Track when status read occurs
+    // Track when status read occurs.
+    // IMPORTANT: cordic_start must have HIGHER priority than cordic_valid_out.
+    // If both fire in the same cycle (new request arrives same cycle computation ends),
+    // we must clear the flag so the CPU correctly waits for the new result.
     reg latched_valid;
     always @(posedge clk) begin
-        if (!reset) latched_valid <= 0;
-        else if (cordic_valid_out) latched_valid <= 1;
-        else if (cordic_start) latched_valid <= 0;
+        if (!reset)         latched_valid <= 0;
+        else if (cordic_start) latched_valid <= 0; // New request: always clear first
+        else if (cordic_valid_out) latched_valid <= 1; // Only set when no new request
     end
+
+    reg aw_en;
+    reg w_en;
+    reg [31:0] waddr_latched;
 
     // AXI WRITE logic
     always @(posedge clk) begin
@@ -59,21 +66,38 @@ module axi_cordic_slave (
             s_axi_awready <= 0;
             s_axi_wready <= 0;
             s_axi_bvalid <= 0;
+            aw_en <= 0;
+            w_en <= 0;
+            waddr_latched <= 0;
         end else begin
-            if (s_axi_awvalid && !s_axi_awready) s_axi_awready <= 1;
-            else s_axi_awready <= 0;
+            // Handshake AW
+            if (s_axi_awvalid && !s_axi_awready && !aw_en) begin
+                s_axi_awready <= 1;
+                aw_en <= 1;
+                waddr_latched <= s_axi_awaddr;
+            end else if (s_axi_awready) begin
+                s_axi_awready <= 0;
+            end
 
-            if (s_axi_wvalid && !s_axi_wready) s_axi_wready <= 1;
-            else s_axi_wready <= 0;
+            // Handshake W
+            if (s_axi_wvalid && !s_axi_wready && !w_en) begin
+                s_axi_wready <= 1;
+                w_en <= 1;
+            end else if (s_axi_wready) begin
+                s_axi_wready <= 0;
+            end
             
-            // Check for actual Write
-            if (s_axi_wvalid && s_axi_wready && s_axi_awvalid && s_axi_awready) begin
-                if (s_axi_awaddr[7:0] == 8'h00) begin
+            // Perform write when BOTH have been latched and bvalid isn't asserting 
+            if (aw_en && w_en && !s_axi_bvalid) begin
+                if (waddr_latched[7:0] == 8'h00) begin
                     cordic_target_angle <= s_axi_wdata;
                     cordic_start <= 1;
+                    $display("[CORDIC] Start triggered with angle: %h", s_axi_wdata);
                 end
                 s_axi_bvalid <= 1;
                 s_axi_bresp <= 2'b00;
+                aw_en <= 0;
+                w_en <= 0;
             end else if (s_axi_bvalid && s_axi_bready) begin
                 s_axi_bvalid <= 0;
             end

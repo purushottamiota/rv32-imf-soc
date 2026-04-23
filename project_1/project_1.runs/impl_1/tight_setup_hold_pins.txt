@@ -1,0 +1,54 @@
++====================+===================+============================================================+
+| Launch Setup Clock | Launch Hold Clock | Pin                                                        |
++====================+===================+============================================================+
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[24]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[25]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[31]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[29]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[41]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[21]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[44]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[46]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[28]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[19]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[36]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[37]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[33]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[34]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[30]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[32]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[27]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[18]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[42]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[40]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[26]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[11]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_mem_reg/ex_result_o_reg[26]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[8]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[13]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[15]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[5]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[9]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[3]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[4]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[1]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[0]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[7]/D                  |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[12]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[14]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[16]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/mant_res_reg[10]/D                 |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_if_id_reg/id_pc_reg[27]/D                         |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_if_id_reg/id_pc_reg[29]/D                         |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_if_id_reg/id_pc_reg[19]/D                         |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_if_id_reg/id_pc_reg[15]/D                         |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_if_id_reg/id_pc_reg[18]/D                         |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_if_id_reg/id_pc_reg[17]/D                         |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/FSM_sequential_state_reg[1]/D      |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/FSM_sequential_state_reg[2]/D      |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_mult_div/div_zero_fault_reg/D          |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_mult_div/FSM_sequential_state_reg[0]/D |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/exp_res_reg[6]/D                   |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/exp_res_reg[0]/D                   |
+| sys_clk_pin        | sys_clk_pin       | pipe_u/u_ex_stage/u_fpu/exp_res_reg[1]/D                   |
++--------------------+-------------------+------------------------------------------------------------+

@@ -35,27 +35,7 @@ module tb_full_soc;
         .reset(reset),
         .uart_rx(1'b1), // Keep UART Rx idle natively so bootloader exits or waits safely
         .uart_tx(uart_tx),
-        .led(led),
-        
-        .m_axi_awaddr(m_axi_awaddr),
-        .m_axi_awprot(m_axi_awprot),
-        .m_axi_awvalid(m_axi_awvalid),
-        .m_axi_awready(m_axi_awready),
-        .m_axi_wdata(m_axi_wdata),
-        .m_axi_wstrb(m_axi_wstrb),
-        .m_axi_wvalid(m_axi_wvalid),
-        .m_axi_wready(m_axi_wready),
-        .m_axi_bresp(m_axi_bresp),
-        .m_axi_bvalid(m_axi_bvalid),
-        .m_axi_bready(m_axi_bready),
-        .m_axi_araddr(m_axi_araddr),
-        .m_axi_arprot(m_axi_arprot),
-        .m_axi_arvalid(m_axi_arvalid),
-        .m_axi_arready(m_axi_arready),
-        .m_axi_rdata(m_axi_rdata),
-        .m_axi_rresp(m_axi_rresp),
-        .m_axi_rvalid(m_axi_rvalid),
-        .m_axi_rready(m_axi_rready)
+        .led(led)
     );
 
     // Instance of our AXI CORDIC Math Accelerator Node
@@ -87,6 +67,29 @@ module tb_full_soc;
 
     always #5 clk = ~clk;
 
+    // PC Monitor - print PC every 10000 ns (1000 cycles)
+    always @(posedge clk) begin
+        if ($time % 100000 == 5000)
+            $display("[PC] Time %t | PC=%h | cordic_busy=%b systolic_busy=%b | CORDIC_state=%0d SYS_state=%0d",
+                $time,
+                SOC_CORE.current_pc,
+                SOC_CORE.cordic_busy,
+                SOC_CORE.systolic_busy,
+                SOC_CORE.axi_master_inst.state,
+                SOC_CORE.axi_master_systolic_inst.state);
+    end
+
+    // Monitor CORDIC slave to detect when it starts/completes
+    always @(posedge clk) begin
+        if (SOC_CORE.axi_master_inst.state == 1 && SOC_CORE.axi_master_inst.m_axi_awvalid)
+            $display("[CORDIC-WRITE] Time %t | Addr=%h Data=%h", $time, 
+                SOC_CORE.axi_master_inst.m_axi_awaddr, SOC_CORE.axi_master_inst.m_axi_wdata);
+        if (SOC_CORE.axi_master_inst.state == 3 && SOC_CORE.axi_master_inst.m_axi_arvalid)
+            $display("[CORDIC-READ]  Time %t | Addr=%h", $time, SOC_CORE.axi_master_inst.m_axi_araddr);
+        if (SOC_CORE.axi_master_inst.state == 4 && SOC_CORE.m_axi_rvalid)
+            $display("[CORDIC-RDATA] Time %t | Data=%h", $time, SOC_CORE.m_axi_rdata);
+    end
+
     // Monitor logic to cleanly print when internal Systolic AXI traffic is happening
     always @(posedge clk) begin
         if (SOC_CORE.sys_awvalid && SOC_CORE.sys_awready) begin
@@ -100,9 +103,48 @@ module tb_full_soc;
         end
     end
 
+    // Cycle counter for monitoring
+    integer cycle_cnt;
+    always @(posedge clk) begin
+        if (!reset) cycle_cnt <= 0;
+        else cycle_cnt <= cycle_cnt + 1;
+    end
+
+    // PC Monitor - print every 200,000 cycles
+    always @(posedge clk) begin
+        if (reset && (cycle_cnt % 200000 == 0))
+            $display("[PC] cycle=%0d | PC=%h | cordic_busy=%b sys_busy=%b | CORDIC_st=%0d SYS_st=%0d",
+                cycle_cnt,
+                SOC_CORE.current_pc,
+                SOC_CORE.cordic_busy,
+                SOC_CORE.systolic_busy,
+                SOC_CORE.axi_master_inst.state,
+                SOC_CORE.axi_master_systolic_inst.state);
+    end
+
+    // Monitor CORDIC slave to detect when it starts/completes
+    always @(posedge clk) begin
+        if (SOC_CORE.axi_master_inst.state == 1 && SOC_CORE.axi_master_inst.m_axi_awvalid)
+            $display("[CORDIC-WRITE] cycle=%0d | Addr=%h Data=%h", cycle_cnt,
+                SOC_CORE.axi_master_inst.m_axi_awaddr, SOC_CORE.axi_master_inst.m_axi_wdata);
+        if (SOC_CORE.axi_master_inst.state == 3 && SOC_CORE.axi_master_inst.m_axi_arvalid)
+            $display("[CORDIC-READ]  cycle=%0d | Addr=%h", cycle_cnt, SOC_CORE.axi_master_inst.m_axi_araddr);
+        if (SOC_CORE.axi_master_inst.state == 4 && SOC_CORE.m_axi_rvalid)
+            $display("[CORDIC-RDATA] cycle=%0d | Data=%h", cycle_cnt, SOC_CORE.m_axi_rdata);
+    end
+
+    // Monitor logic to cleanly print when internal Systolic AXI traffic is happening
+    always @(posedge clk) begin
+        if (SOC_CORE.sys_awvalid && SOC_CORE.sys_awready)
+            $display("[SYS-WRITE] cycle=%0d | Addr=%h Data=%d", cycle_cnt, SOC_CORE.sys_awaddr, SOC_CORE.sys_wdata);
+        if (SOC_CORE.sys_rvalid && SOC_CORE.sys_rready)
+            $display("[SYS-READ]  cycle=%0d | Addr=%h Data=%d", cycle_cnt, SOC_CORE.sys_araddr, SOC_CORE.sys_rdata_in);
+    end
+
     initial begin
         clk = 0;
         reset = 0;
+        cycle_cnt = 0;
         
         // Assert Reset
         #50 reset = 1;
@@ -110,11 +152,11 @@ module tb_full_soc;
         // Bypass bootloader wait state for pure Verilog testbenches (since imem.hex is pre-loaded by the synth)
         force SOC_CORE.cpu_reset = reset;
         
-        // The Bootloader and C-program will organically boot off imem.hex, setup Stack, 
-        // calculate Float/IMF operations, and then request the CORDIC blocks purely automatically.
-        // Provide enough simulation time for compilation logic.
-        #20000;
-        $display("Completed execution period.");
+        // UART delay is 15000 cycles/char. First string is ~32 chars = 480,000 cycles.
+        // 4 CORDIC tests + Systolic = ~2M cycles total. 30ms @ 10ns/clk = 3,000,000 cycles.
+        #30000000;
+        $display("Sim ended at cycle=%0d", cycle_cnt);
         $finish;
     end
 endmodule
+

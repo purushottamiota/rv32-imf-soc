@@ -77,3 +77,35 @@ Result [3] = 0
 ==============================================
                ALL TESTS DONE
 ==============================================
+
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: Sin=0x00000000 Cos=0x1921FB54
+CORDIC [ 45 deg]: Sin=0x10000005 Cos=0x0C90FDAB
+CORDIC [ 30 deg]: Sin=0x0B504F33 Cos=0x0860A91C
+CORDIC [-45 deg]: Sin=0x08000002 Cos=0xF36F0255
+SYSTOLIC [Identity x Vector]: Out=[0,0,0,40]
+SYSTOLIC [Scale-by-2]: Out=[0,0,0,40]
+--- ALL TESTS FINISHED ---
+
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
+--- NEW SESSION ---
+--- EXTENDED SoC TEST SUITE ---
+CORDIC [ 90 deg]: 
