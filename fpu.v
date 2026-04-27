@@ -36,13 +36,14 @@ module fpu(
     wire [24:0] mant_a = (a[30:23] == 0) ? {2'b00, a[22:0]} : {2'b01, a[22:0]};
     wire [24:0] mant_b = (b[30:23] == 0) ? {2'b00, b[22:0]} : {2'b01, b[22:0]};
 
-    reg [51:0] iter_acc;
+    reg [52:0] iter_acc;        // FIX: Widened to 53 bits (52:0)
     reg [25:0] iter_div;
     reg [5:0]  iter_count;
+    reg [7:0]  exp_b_reg;
     
-    wire [51:0] div_shifted = iter_acc << 1;
-    wire [25:0] div_upper   = div_shifted[51:26];
-    wire        div_sub_ok  = (div_upper >= iter_div);
+    wire [52:0] div_shifted = iter_acc << 1;                     // FIX: 53 bits
+    wire [26:0] div_upper   = div_shifted[52:26];                // FIX: 27 bits
+    wire        div_sub_ok  = (div_upper >= {1'b0, iter_div});   // FIX: Zero-pad iter_div for 27-bit safe comparison
 
     // --- CUSTOM FCVT.S.W BYPASS ---
     reg [31:0] cvt_sw_result;
@@ -86,6 +87,7 @@ module fpu(
             iter_acc  <= 52'b0;
             iter_div  <= 26'b0;
             iter_count<= 6'b0;
+            exp_b_reg <= 8'b0;
         end else begin
             case(state)
                 IDLE: begin
@@ -94,7 +96,7 @@ module fpu(
                         if (funct5 == FADD_S || funct5 == FSUB_S) begin
                             if (a[30:0] == 0) begin final_res <= {sign_b, b[30:0]}; state <= DONE_STATE; end
                             else if (b[30:0] == 0) begin final_res <= a; state <= DONE_STATE; end
-                            else begin exp_res <= exp_a; mant_res <= {23'b0, mant_a}; iter_div <= mant_b; state <= ALIGN; end
+                            else begin exp_res <= exp_a; exp_b_reg <= exp_b; mant_res <= {23'b0, mant_a}; iter_div <= mant_b; state <= ALIGN; end
                         end 
                         else if (funct5 == FMUL_S) begin
                             sign_res <= sign_a ^ b[31]; exp_res <= exp_a + exp_b - 127;
@@ -104,7 +106,7 @@ module fpu(
                             if (b[30:0] == 0) begin final_res <= 32'h7F800000; final_exc <= 1; state <= DONE_STATE; end
                             else begin
                                 sign_res <= sign_a ^ b[31]; exp_res <= exp_a - exp_b + 127;
-                                iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {3'b0, 1'b1, a[22:0], 25'b0};
+                                iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {4'b0, 1'b1, a[22:0], 25'b0}; // FIX: 4'b0 instead of 3'b0 to make 53 bits total
                                 iter_count <= 26; state <= ITERATE;
                             end
                         end
@@ -112,26 +114,39 @@ module fpu(
                 end
                 
                 ALIGN: begin
-                    if (exp_res > exp_b) iter_div <= iter_div >> 1;
-                    else if (exp_res < exp_b) begin exp_res <= exp_res + 1; mant_res <= mant_res >> 1; end 
-                    else state <= DO_ADD;
+                    if (exp_res > exp_b_reg) begin
+                        iter_div <= iter_div >> 1;
+                        exp_b_reg <= exp_b_reg + 1;
+                    end else if (exp_res < exp_b_reg) begin 
+                        exp_res <= exp_res + 1; 
+                        mant_res <= mant_res >> 1; 
+                    end else begin
+                        state <= DO_ADD;
+                    end
                 end
                 
                 DO_ADD: begin
-                    if (sign_a == sign_b) begin mant_res <= mant_res[24:0] + iter_div; sign_res <= sign_a; end 
-                    else begin
-                        if (mant_res[24:0] >= iter_div) begin mant_res <= mant_res[24:0] - iter_div; sign_res <= sign_a; end
-                        else begin mant_res <= iter_div - mant_res[24:0]; sign_res <= sign_b; end
+                    if (sign_a == sign_b) begin 
+                        mant_res <= ({23'b0, mant_res[24:0]} + {23'b0, iter_div[24:0]}) << 23; 
+                        sign_res <= sign_a; 
+                    end else begin
+                        if (mant_res[24:0] >= iter_div[24:0]) begin 
+                            mant_res <= ({23'b0, mant_res[24:0]} - {23'b0, iter_div[24:0]}) << 23; 
+                            sign_res <= sign_a; 
+                        end else begin 
+                            mant_res <= ({23'b0, iter_div[24:0]} - {23'b0, mant_res[24:0]}) << 23; 
+                            sign_res <= sign_b; 
+                        end
                     end
-                    mant_res <= mant_res << 23; state <= NORMALIZE;
+                    state <= NORMALIZE;
                 end
                 
                 ITERATE: begin
                     if (iter_count > 0) begin
-                        if (div_sub_ok) iter_acc <= { (div_upper - iter_div), div_shifted[25:1], 1'b1 };
+                        if (div_sub_ok) iter_acc <= { (div_upper - {1'b0, iter_div}), div_shifted[25:1], 1'b1 }; // FIX: Zero-padded subtraction
                         else iter_acc <= { div_upper, div_shifted[25:1], 1'b0 };
                         iter_count <= iter_count - 1;
-                    end else begin mant_res <= {iter_acc[25:0], 22'b0}; state <= NORMALIZE; end
+                    end else begin mant_res <= {1'b0, iter_acc[25:0], 21'b0}; state <= NORMALIZE; end
                 end
                 
                 NORMALIZE: begin

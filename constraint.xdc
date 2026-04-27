@@ -1,9 +1,10 @@
 ################ CLOCK ################
-################ CLOCK ################
 set_property PACKAGE_PIN E3 [get_ports clk]
 set_property IOSTANDARD LVCMOS33 [get_ports clk]
-# --- UPDATED STRICT SYNTAX ---
 create_clock -add -name sys_clk_pin -period 10.00 -waveform {0 5} [get_ports clk]
+
+# --- NEW: Tell Vivado about your custom 50MHz clock divider! ---
+create_generated_clock -name clk_50mhz -source [get_ports clk] -divide_by 2 [get_pins my_divider/toggle_reg_reg/Q]
 
 ################ RESET ################
 set_property PACKAGE_PIN J15 [get_ports reset]
@@ -55,4 +56,4 @@ set_property -dict { PACKAGE_PIN J14   IOSTANDARD LVCMOS33 } [get_ports { an[3] 
 set_property -dict { PACKAGE_PIN P14   IOSTANDARD LVCMOS33 } [get_ports { an[4] }]; 
 set_property -dict { PACKAGE_PIN T14   IOSTANDARD LVCMOS33 } [get_ports { an[5] }]; 
 set_property -dict { PACKAGE_PIN K2    IOSTANDARD LVCMOS33 } [get_ports { an[6] }]; 
-set_property -dict { PACKAGE_PIN U13   IOSTANDARD LVCMOS33 } [get_ports { an[7] }]; 
+set_property -dict { PACKAGE_PIN U13   IOSTANDARD LVCMOS33 } [get_ports { an[7] }];

@@ -9,7 +9,8 @@ module bootloader (
     output reg         cpu_reset,     // Active low reset for the CPU pipeline
     output reg         boot_we,       // Write enable for memory
     output reg [31:0]  boot_addr,     // Address for memory
-    output reg [31:0]  boot_wdata     // Data for memory
+    output reg [31:0]  boot_wdata,    // Data for memory
+    output reg         uart_rx_ack    // Ack the received byte
 );
 
     // States
@@ -118,9 +119,13 @@ module bootloader (
                         cpu_reset <= 1'b1;
                     end
                 endcase
-            end else if (boot_we) begin
-                // Increment address after the write is pulsed
-                boot_addr <= boot_addr + 4;
+                uart_rx_ack <= 1'b1;
+            end else begin
+                uart_rx_ack <= 1'b0;
+                if (boot_we) begin
+                    // Increment address after the write is pulsed
+                    boot_addr <= boot_addr + 4;
+                end
             end
         end
     end
