@@ -177,8 +177,43 @@ module fpu(
     // FIX: The stall completely drops when we reach DONE_STATE, allowing the pipeline to advance
     assign stall_fpu = (fp_en && is_multi_cycle && state != DONE_STATE);
     
+    wire [31:0] sgnj_result = (funct3 == 3'b000) ? {b[31], a[30:0]} :          // FSGNJ.S
+                              (funct3 == 3'b001) ? {~b[31], a[30:0]} :         // FSGNJN.S
+                              (funct3 == 3'b010) ? {a[31] ^ b[31], a[30:0]} :  // FSGNJX.S
+                              32'h0;
+
+    reg [31:0] cvt_ws_result;
+    reg [7:0] true_exp;
+    reg [47:0] shifted_mant;
+    always @(*) begin
+        if (funct5 == FCVT_W_S) begin // FCVT.W.S (Float to Int)
+            if (a[30:23] < 127) begin
+                cvt_ws_result = 32'd0;
+            end else if (a[30:23] >= 127 + 31) begin
+                cvt_ws_result = a[31] ? 32'h80000000 : 32'h7FFFFFFF;
+            end else begin
+                true_exp = a[30:23] - 127;
+                shifted_mant = {24'b0, 1'b1, a[22:0]};
+                if (true_exp < 23)
+                    shifted_mant = shifted_mant >> (23 - true_exp);
+                else
+                    shifted_mant = shifted_mant << (true_exp - 23);
+                
+                cvt_ws_result = a[31] ? -shifted_mant[31:0] : shifted_mant[31:0];
+            end
+        end else begin
+            true_exp = 8'd0;
+            shifted_mant = 48'd0;
+            cvt_ws_result = 32'd0;
+        end
+    end
+
     assign result = (fp_en && funct5 == FCVT_S_W) ? cvt_sw_result : 
+                    (fp_en && funct5 == FCVT_W_S) ? cvt_ws_result :
+                    (fp_en && funct5 == 5'b00100) ? sgnj_result   : // FSGNJ.S
                     (fp_en && funct5 == FCMP_S)   ? {31'b0, (funct3 == 3'b010 ? (a == b) : ($signed(a) < $signed(b)))} : 
+                    (fp_en && funct5 == FMV_X_W)  ? a :             // FMV.X.W
+                    (fp_en && funct5 == FMV_W_X)  ? a :             // FMV.W.X
                     final_res;
                     
     assign fpu_exception = final_exc;

@@ -6,20 +6,29 @@ module clk_div (
     output wire clk_out   // 50MHz output
 );
 
-    reg toggle_reg = 1'b0;
+    wire clkfb;
+    wire clk_out_unbuf;
 
-    // Toggle the register on every rising edge of the 100MHz clock
-    always @(posedge clk_in or posedge reset) begin
-        if (reset) begin
-            toggle_reg <= 1'b0;
-        end else begin
-            toggle_reg <= ~toggle_reg;
-        end
-    end
+    // Use Xilinx's built-in Mixed-Mode Clock Manager (MMCM)
+    // This is the cleanest way to divide a clock in Vivado and 
+    // requires ZERO manual create_generated_clock constraints!
+    MMCME2_BASE #(
+        .BANDWIDTH("OPTIMIZED"),
+        .CLKFBOUT_MULT_F(10.0),    // Multiply 100MHz by 10 = 1000MHz VCO
+        .CLKIN1_PERIOD(10.0),      // 100MHz input = 10ns period
+        .CLKOUT0_DIVIDE_F(20.0)    // Divide 1000MHz by 20 = 50MHz output
+    ) mmcm_inst (
+        .CLKIN1(clk_in),
+        .CLKOUT0(clk_out_unbuf),
+        .CLKFBOUT(clkfb),
+        .CLKFBIN(clkfb),
+        .RST(reset),
+        .PWRDWN(1'b0)
+    );
 
-    // XILINX SPECIFIC: Force the signal onto the global clock tree
+    // Buffer the output onto the global clock tree
     BUFG bufg_inst (
-        .I(toggle_reg),
+        .I(clk_out_unbuf),
         .O(clk_out)
     );
 

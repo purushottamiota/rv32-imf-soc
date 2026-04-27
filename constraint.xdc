@@ -3,8 +3,8 @@ set_property PACKAGE_PIN E3 [get_ports clk]
 set_property IOSTANDARD LVCMOS33 [get_ports clk]
 create_clock -add -name sys_clk_pin -period 10.00 -waveform {0 5} [get_ports clk]
 
-# --- NEW: Tell Vivado about your custom 50MHz clock divider! ---
-create_generated_clock -name clk_50mhz -source [get_ports clk] -divide_by 2 [get_pins my_divider/toggle_reg_reg/Q]
+# --- REMOVED manual create_generated_clock constraint ---
+# Vivado automatically derives constraints for MMCME2_BASE outputs!
 
 ################ RESET ################
 set_property PACKAGE_PIN J15 [get_ports reset]

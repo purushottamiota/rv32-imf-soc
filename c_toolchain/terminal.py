@@ -48,8 +48,8 @@ ser.reset_output_buffer()
 
 print("\n" + "="*58)
 print(" READY TO FLASH. PLEASE FOLLOW THESE STEPS:")
-print(" 1. Push Switch 0 (J15) UP to hold the CPU in reset.")
-print(" 2. Push Switch 0 (J15) DOWN to activate the Bootloader.")
+print(" 1. Push Switch 0 (J15) DOWN to hold the CPU in reset.")
+print(" 2. Push Switch 0 (J15) UP to activate the Bootloader.")
 print(" 3. Press ENTER on your keyboard to send the program.")
 print("="*58)
 
