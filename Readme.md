@@ -76,3 +76,11 @@ This workload tests the custom hardware accelerators mapped onto the processor's
 3. The Python script will pause and prompt you to activate the Bootloader.
 4. Push **Switch 0 UP** to release the reset.
 5. Press **ENTER** on your keyboard to flash the payload and view the results.
+
+**Outputs:**
+<img width="890" height="725" alt="image" src="https://github.com/user-attachments/assets/27a12d1c-0e79-4a54-8a28-ba9bb8a92b84" />
+<img width="644" height="402" alt="image" src="https://github.com/user-attachments/assets/ac6d3c90-2c80-4a69-9d30-cc3d2e7cd0ad" />
+<img width="765" height="224" alt="image" src="https://github.com/user-attachments/assets/63d04068-c00e-4ca7-92fc-be9016482352" />
+
+
+
