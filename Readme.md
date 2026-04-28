@@ -37,7 +37,7 @@ This workload thoroughly validates the integer pipeline and the hardware Multipl
 - **Division by Zero**: Asserts that dividing by zero correctly returns `-1` (all 1s) and modulo by zero returns the original dividend, strictly adhering to the RISC-V specification.
 
 **Steps to run:**
-1. Push **Switch 0 DOWN** to hold the FPGA in reset.
+1. Push **Switch 0 DOWN** to hold the FPGA in reset. After that Program (or reprogram) the FPGA using bitstream(top_fpga.bit) present in bitstream directory.
 2. Execute the compilation and run command:
    ```bash
    make FILE=c_toolchain/rv32m_full_testing.c run COM=COM4
@@ -51,7 +51,7 @@ This workload thoroughly validates the integer pipeline and the hardware Multipl
 This workload stresses the floating-point unit pipeline. It exercises IEEE 754 single-precision additions, subtractions, multiplications, and divisions. It also leverages the processor's combinatorial hardware logic to test sign negation (`fsgnjn.s`) and bi-directional integer-float conversions (`fcvt.w.s` and `fcvt.s.w`).
 
 **Steps to run:**
-1. Push **Switch 0 DOWN** to hold the FPGA in reset.
+1. Push **Switch 0 DOWN** to hold the FPGA in reset. After that Program (or reprogram) the FPGA using bitstream(top_fpga.bit) present in bitstream directory.
 2. Execute the compilation and run command:
    ```bash
    make FILE=c_toolchain/fpu_main.c run COM=COM4
@@ -67,7 +67,7 @@ This workload tests the custom hardware accelerators mapped onto the processor's
 - **Systolic Array**: Performs stepwise matrix multiplications, demonstrating the hardware wavefront execution by shifting activations and accumulating partial sums over multiple clock cycles.
 
 **Steps to run:**
-1. Push **Switch 0 DOWN** to hold the FPGA in reset.
+1. Push **Switch 0 DOWN** to hold the FPGA in reset. After that Program (or reprogram) the FPGA using bitstream(top_fpga.bit) present in bitstream directory.
 2. Execute the compilation and run command:
    ```bash
    make FILE=c_toolchain/main.c run COM=COM4
