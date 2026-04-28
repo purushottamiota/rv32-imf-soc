@@ -133,10 +133,14 @@ module ex_stage (
     wire        stall_fpu;
     wire        fpu_zero_fault;
     
+    // FCVT.S.W (11010) and FMV.W.X (11110) read an INTEGER from rs1
+    wire use_int_operand = (fp_funct5_i == 5'b11010 || fp_funct5_i == 5'b11110);
+    wire [31:0] fpu_operand_a = use_int_operand ? alu_operand1 : fp_fw_operand1;
+    
     fpu u_fpu (
         .clk            (clk),
         .reset          (reset),
-        .a              (fp_fw_operand1),
+        .a              (fpu_operand_a),
         .b              (fp_fw_operand2),
         .funct5         (fp_funct5_i),
         .funct3         (alu_op_i),

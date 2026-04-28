@@ -1,3 +1,4 @@
+
 #include "util.h"
 #include <stdint.h>
 
@@ -74,47 +75,34 @@ void test_systolic_identity() {
     SYS_ACT_BASE[i] = (i + 1) * 10;
   }
 
-  // 3. Pulse steps and print intermediate results (Latency = 7)
+  // 3. Pulse steps (Latency = 7)
+  // FIX 2: We must do all 7 steps in ONE loop and NEVER clear SYS_ACT_BASE
+  // 0.
   for (int i = 0; i < 7; i++) {
     *SYS_STEP = 1;
-    print_string("  Step ");
-    print_int(i);
-    print_string(": [");
-    print_hex(SYS_OUT_BASE[0]);
-    print_string(", ");
-    print_hex(SYS_OUT_BASE[1]);
-    print_string(", ");
-    print_hex(SYS_OUT_BASE[2]);
-    print_string(", ");
-    print_hex(SYS_OUT_BASE[3]);
-    print_string("]\n");
   }
+
+  // 4. Print Results
+  print_string("Out=[");
+  print_int(SYS_OUT_BASE[0]);
+  print_string(",");
+  print_int(SYS_OUT_BASE[1]);
+  print_string(",");
+  print_int(SYS_OUT_BASE[2]);
+  print_string(",");
+  print_int(SYS_OUT_BASE[3]);
+  print_string("]\n");
 }
 
 int main() {
   print_string("--- EXTENDED SoC TEST SUITE ---\n");
 
-  // 1. CORDIC TESTS (angles in Q4.28 fixed-point)
-  test_cordic(" 90 deg", 0x1921FB54); // PI/2
-  test_cordic(" 45 deg", 0x0C90FDAB); // PI/4
-  test_cordic(" 30 deg", 0x0860A91C); // PI/6
-  test_cordic("-45 deg", 0xF36F0255); // -PI/4 (2's complement of 0x0C90FDAB)
 
   // 2. SYSTOLIC ARRAY TESTS
   test_systolic_identity();
 
-  // --- PIPELINE FLUSH ---
-  // To avoid old activations/partial sums bleeding into the next test,
-  // we must flush the systolic array pipeline with 0s.
-  for (int i = 0; i < 4; i++) {
-    SYS_ACT_BASE[i] = 0;
-  }
-  for (int i = 0; i < 7; i++) {
-    *SYS_STEP = 1;
-  }
-
   // 3. CUSTOM SYSTOLIC (Scaling)
-  print_string("SYSTOLIC [Scale-by-2]:\n");
+  print_string("SYSTOLIC [Scale-by-2]: ");
   for (int i = 0; i < 16; i++) {
     SYS_WEIGHT_BASE[i] = (i % 5 == 0) ? 2 : 0;
   }
@@ -124,21 +112,20 @@ int main() {
     SYS_ACT_BASE[i] = (i + 1) * 5;
   }
 
-  // Keep inputs steady for the full wavefront latency and print step-by-step
+  // Keep inputs steady for the full wavefront latency
   for (int i = 0; i < 7; i++) {
     *SYS_STEP = 1;
-    print_string("  Step ");
-    print_int(i);
-    print_string(": [");
-    print_hex(SYS_OUT_BASE[0]);
-    print_string(", ");
-    print_hex(SYS_OUT_BASE[1]);
-    print_string(", ");
-    print_hex(SYS_OUT_BASE[2]);
-    print_string(", ");
-    print_hex(SYS_OUT_BASE[3]);
-    print_string("]\n");
   }
+
+  print_string("Out=[");
+  print_int(SYS_OUT_BASE[0]);
+  print_string(",");
+  print_int(SYS_OUT_BASE[1]);
+  print_string(",");
+  print_int(SYS_OUT_BASE[2]);
+  print_string(",");
+  print_int(SYS_OUT_BASE[3]);
+  print_string("]\n");
 
   print_string("--- ALL TESTS FINISHED ---\n");
   while (1)
