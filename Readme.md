@@ -1,4 +1,5 @@
-# Custom RISC-V RV32IMF SoC
+# RV-Accel: A 5-Stage RV32IMF SoC with Custom RTL Math and DSP Accelerators
+
 
 ## Overview
 This project implements a fully custom, 5-stage pipelined RISC-V processor conforming to the RV32IMF instruction set architecture. It is synthesized and optimized for the Digilent Nexys A7 FPGA platform.
