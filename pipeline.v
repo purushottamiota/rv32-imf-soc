@@ -1,8 +1,4 @@
 `timescale 1ns/1ps
-// Stage files and hazard unit are compiled natively via Vivado workspace.
-// change is getting reflected
-// hi
-
 
 module pipe #(
 	parameter [31:0] RESET = 32'h0000_0000
