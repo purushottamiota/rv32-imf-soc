@@ -21,7 +21,7 @@ module uart_tx_fifo #(
     // Calculate the number of bits needed to represent the depth
     localparam ADDR_WIDTH = $clog2(DEPTH);
 
-    // FIFO Memory array - inferred as Block RAM (BRAM) by synthesis tools
+    // FIFO Memory array - inferred as Distributed LUTRAM by synthesis tools
     reg [DATA_WIDTH-1:0] memory [0:DEPTH-1];
     
     // Read and Write pointers
