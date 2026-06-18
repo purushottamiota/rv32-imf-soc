@@ -17,7 +17,7 @@ module fpu(
 );
     `include "opcode.vh"
     
-    // FIX: Added DONE_STATE=6 to break the stall deadlock
+    
     localparam IDLE=0, ALIGN=1, DO_ADD=2, ITERATE=3, NORMALIZE=4, PACK=5, DONE_STATE=6;
     reg [2:0] state;
     
@@ -58,9 +58,9 @@ module fpu(
     reg        norm_found;
     integer k;
     
-    wire [52:0] div_shifted = iter_acc << 1;                     // FIX: 53 bits
-    wire [26:0] div_upper   = div_shifted[52:26];                // FIX: 27 bits
-    wire        div_sub_ok  = (div_upper >= {1'b0, iter_div});   // FIX: Zero-pad iter_div for 27-bit safe comparison
+    wire [52:0] div_shifted = iter_acc << 1;                     
+    wire [26:0] div_upper   = div_shifted[52:26];                
+    wire        div_sub_ok  = (div_upper >= {1'b0, iter_div});   
 
     // --- CUSTOM FCVT.S.W BYPASS ---
     reg [31:0] cvt_sw_result;
@@ -99,9 +99,7 @@ module fpu(
     // --- MAIN FSM ---
     wire is_multi_cycle = (funct5 == FADD_S || funct5 == FSUB_S || funct5 == FMUL_S || funct5 == FDIV_S || funct5 == FSQRT_S);
 
-    // Reset all FSM-owned state in one block so the synthesiser sees a clear
-    // priority between reset and the case-branch assignments (resolves Synth
-    // 8-7137 "set and reset with same priority" on exp_res / mant_res etc.).
+   
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
             state     <= IDLE;
@@ -134,14 +132,14 @@ module fpu(
                         end
                         else if (funct5 == FDIV_S) begin
                             if (b[30:0] == 0) begin 
-                                if (a[30:0] == 0) final_res <= 32'h7FC00000; // NaN for 0 / 0
-                                else final_res <= {sign_a ^ b[31], 8'hFF, 23'b0}; // +/- Infinity
-                                final_exc <= 0; // RV32F standard sets CSR flags, but does not hard-trap
+                                if (a[30:0] == 0) final_res <= 32'h7FC00000; 
+                                else final_res <= {sign_a ^ b[31], 8'hFF, 23'b0}; 
+                                final_exc <= 0; 
                                 state <= DONE_STATE; 
                             end
                             else begin
                                 sign_res <= sign_a ^ b[31]; exp_res <= exp_a - exp_b + 127;
-                                iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {4'b0, 1'b1, a[22:0], 25'b0}; // FIX: 4'b0 instead of 3'b0 to make 53 bits total
+                                iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {4'b0, 1'b1, a[22:0], 25'b0}; 
                                 iter_count <= 26; state <= ITERATE;
                             end
                         end
@@ -213,7 +211,7 @@ module fpu(
                 
                 ITERATE: begin
                     if (iter_count > 0) begin
-                        if (div_sub_ok) iter_acc <= { (div_upper - {1'b0, iter_div}), div_shifted[25:1], 1'b1 }; // FIX: Zero-padded subtraction
+                        if (div_sub_ok) iter_acc <= { (div_upper - {1'b0, iter_div}), div_shifted[25:1], 1'b1 }; 
                         else iter_acc <= { div_upper, div_shifted[25:1], 1'b0 };
                         iter_count <= iter_count - 1;
                     end else begin mant_res <= {1'b0, iter_acc[25:0], 21'b0}; state <= NORMALIZE; end
@@ -270,7 +268,7 @@ module fpu(
         end
     end
 
-    // FIX: The stall completely drops when we reach DONE_STATE, allowing the pipeline to advance
+    
     assign stall_fpu = (fp_en && is_multi_cycle && state != DONE_STATE);
     
     wire [31:0] sgnj_result = (funct3 == 3'b000) ? {b[31], a[30:0]} :          // FSGNJ.S
@@ -297,7 +295,7 @@ module fpu(
             end else if (a[30:23] >= 127 + 31) begin
                 cvt_ws_result = a[31] ? 32'h80000000 : 32'h7FFFFFFF;
             end else begin
-                // Use a standard left-shift to avoid variable right-shift signedness issues in synthesis
+                
                 t_exp = a[30:23] - 8'd127;
                 expanded_mant = {40'd0, 1'b1, a[22:0]};
                 shifted_up = expanded_mant << t_exp;
@@ -308,7 +306,7 @@ module fpu(
         end
     end
 
-    // Correct Floating-Point Comparison Logic (FEQ.S, FLT.S, FLE.S)
+    // Floating-Point Comparison Logic (FEQ.S, FLT.S, FLE.S)
     wire a_is_zero = (a[30:0] == 31'b0);
     wire b_is_zero = (b[30:0] == 31'b0);
     wire both_zero = a_is_zero && b_is_zero;
