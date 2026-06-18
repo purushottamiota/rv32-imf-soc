@@ -41,6 +41,23 @@ module fpu(
     reg [5:0]  iter_count;
     reg [7:0]  exp_b_reg;
     
+    // Intermediate registers for optimized single-cycle math
+    wire signed [9:0] exp_diff = $signed({2'b0, exp_a}) - $signed({2'b0, exp_b});
+    
+    reg [24:0] add_sum_diff;
+    reg [9:0]  add_exp_res;
+    reg        add_sign_res;
+    reg [4:0]  add_shift_amt;
+    reg        add_found_one;
+    reg [24:0] add_norm_mant;
+    integer lzc;
+
+    reg [47:0] norm_mant;
+    reg signed [9:0] norm_exp;
+    reg [5:0]  norm_shift;
+    reg        norm_found;
+    integer k;
+    
     wire [52:0] div_shifted = iter_acc << 1;                     // FIX: 53 bits
     wire [26:0] div_upper   = div_shifted[52:26];                // FIX: 27 bits
     wire        div_sub_ok  = (div_upper >= {1'b0, iter_div});   // FIX: Zero-pad iter_div for 27-bit safe comparison
@@ -106,6 +123,9 @@ module fpu(
                         if (funct5 == FADD_S || funct5 == FSUB_S) begin
                             if (a[30:0] == 0) begin final_res <= {sign_b, b[30:0]}; state <= DONE_STATE; end
                             else if (b[30:0] == 0) begin final_res <= a; state <= DONE_STATE; end
+                            else if (exp_diff > 24) begin final_res <= a; state <= DONE_STATE; end
+                            else if (exp_diff < -24) begin final_res <= {sign_b, b[30:0]}; state <= DONE_STATE; end
+                            else if (exp_a == exp_b) begin exp_res <= exp_a; exp_b_reg <= exp_b; mant_res <= {23'b0, mant_a}; iter_div <= mant_b; state <= DO_ADD; end
                             else begin exp_res <= exp_a; exp_b_reg <= exp_b; mant_res <= {23'b0, mant_a}; iter_div <= mant_b; state <= ALIGN; end
                         end 
                         else if (funct5 == FMUL_S) begin
@@ -141,19 +161,54 @@ module fpu(
                 end
                 
                 DO_ADD: begin
+                    // Perform addition/subtraction
                     if (sign_a == sign_b) begin 
-                        mant_res <= ({23'b0, mant_res[24:0]} + {23'b0, iter_div[24:0]}) << 23; 
-                        sign_res <= sign_a; 
+                        add_sum_diff = {1'b0, mant_res[24:0]} + {1'b0, iter_div[24:0]}; 
+                        add_sign_res = sign_a; 
                     end else begin
                         if (mant_res[24:0] >= iter_div[24:0]) begin 
-                            mant_res <= ({23'b0, mant_res[24:0]} - {23'b0, iter_div[24:0]}) << 23; 
-                            sign_res <= sign_a; 
+                            add_sum_diff = {1'b0, mant_res[24:0]} - {1'b0, iter_div[24:0]}; 
+                            add_sign_res = sign_a; 
                         end else begin 
-                            mant_res <= ({23'b0, iter_div[24:0]} - {23'b0, mant_res[24:0]}) << 23; 
-                            sign_res <= sign_b; 
+                            add_sum_diff = {1'b0, iter_div[24:0]} - {1'b0, mant_res[24:0]}; 
+                            add_sign_res = sign_b; 
                         end
                     end
-                    state <= NORMALIZE;
+                    
+                    // Perform combinational normalization
+                    add_exp_res = exp_res;
+                    add_shift_amt = 0;
+                    add_found_one = 0;
+                    add_norm_mant = add_sum_diff;
+                    
+                    if (add_sum_diff[24]) begin
+                        add_norm_mant = add_sum_diff >> 1;
+                        add_exp_res = add_exp_res + 1;
+                    end else begin
+                        for (lzc = 23; lzc >= 0; lzc = lzc - 1) begin
+                            if (!add_found_one && add_sum_diff[lzc]) begin
+                                add_shift_amt = 23 - lzc;
+                                add_found_one = 1;
+                            end
+                        end
+                        if (add_found_one) begin
+                            add_norm_mant = add_sum_diff[23:0] << add_shift_amt;
+                            add_exp_res = add_exp_res - add_shift_amt;
+                        end else begin
+                            add_norm_mant = 0;
+                        end
+                    end
+                    
+                    // Perform packing logic combinationally
+                    if (add_norm_mant == 0 || $signed(add_exp_res) <= 0) begin
+                        final_res <= {add_sign_res, 31'b0};
+                    end else if (add_exp_res >= 255) begin
+                        final_res <= {add_sign_res, 8'hFF, 23'b0}; // Infinity
+                    end else begin
+                        final_res <= {add_sign_res, add_exp_res[7:0], add_norm_mant[22:0]};
+                    end
+                    
+                    state <= DONE_STATE;
                 end
                 
                 ITERATE: begin
@@ -165,15 +220,43 @@ module fpu(
                 end
                 
                 NORMALIZE: begin
-                    if (mant_res[47]) begin mant_res <= mant_res >> 1; exp_res <= exp_res + 1; state <= PACK; end 
-                    else if (mant_res[46] == 0 && mant_res != 0) begin mant_res <= mant_res << 1; exp_res <= exp_res - 1; end 
-                    else state <= PACK;
+                    // Combinational normalization and packing for FMUL / FDIV
+                    norm_mant = mant_res;
+                    norm_exp = exp_res;
+                    norm_shift = 0;
+                    norm_found = 0;
+                    
+                    if (norm_mant[47]) begin
+                        norm_mant = norm_mant >> 1;
+                        norm_exp = norm_exp + 1;
+                    end else begin
+                        for (k = 46; k >= 0; k = k - 1) begin
+                            if (!norm_found && norm_mant[k]) begin
+                                norm_shift = 46 - k;
+                                norm_found = 1;
+                            end
+                        end
+                        if (norm_found) begin
+                            norm_mant = norm_mant << norm_shift;
+                            norm_exp = norm_exp - norm_shift;
+                        end else begin
+                            norm_mant = 0;
+                        end
+                    end
+                    
+                    // PACK logic combinationally
+                    if (norm_mant == 0 || norm_exp <= 0) begin
+                        final_res <= {sign_res, 31'b0};
+                    end else if (norm_exp >= 255) begin
+                        final_res <= {sign_res, 8'hFF, 23'b0}; // Infinity
+                    end else begin
+                        final_res <= {sign_res, norm_exp[7:0], norm_mant[45:23]};
+                    end
+                    
+                    state <= DONE_STATE;
                 end
                 
                 PACK: begin
-                    if (mant_res == 0 || $signed(exp_res) <= 0) final_res <= {sign_res, 31'b0};
-                    else if (exp_res >= 255) final_res <= {sign_res, 8'hFF, 23'b0};
-                    else final_res <= {sign_res, exp_res[7:0], mant_res[45:23]};
                     state <= DONE_STATE; 
                 end
                 
