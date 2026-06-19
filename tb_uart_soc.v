@@ -70,8 +70,8 @@ module tb_uart_soc;
         // Give the bootloader a moment to reset
         #500;
         
-        $display("[SIM] Sending DEADBEEF Header...");
-        send_byte(8'hDE); send_byte(8'hAD); send_byte(8'hBE); send_byte(8'hEF);
+        $display("[SIM] Sending 0x424F4F54 (BOOT) Header...");
+        send_byte(8'h42); send_byte(8'h4F); send_byte(8'h4F); send_byte(8'h54);
         
         // Dynamically find size of program.bin!
         begin : load_bin
