@@ -43,6 +43,8 @@ module pipe #(
     wire flush_ex_haz;
     wire [1:0] forward_a_sel;
     wire [1:0] forward_b_sel;
+    wire [1:0] forward_a_fp_sel;
+    wire [1:0] forward_b_fp_sel;
 
     // CSR Wires
     wire [11:0] id_csr_addr, ex_csr_addr, mem_csr_addr, wb_csr_addr;
@@ -53,7 +55,7 @@ module pipe #(
     wire        id_mult_div_en, ex_mult_div_en;
     wire        stall_ex_request;
 
-    // Merged stales
+    // Merged stalls
     wire stage_stall_if = stall | stall_if_haz;
     wire stage_stall_id = stall | stall_id_haz;
     wire stage_stall_ex = stall | stall_ex_haz;
@@ -167,9 +169,7 @@ module pipe #(
     // ----------------------------------------------------
     // Internal RegFile Forwarding (Read in ID)
     // ----------------------------------------------------
-    // ----------------------------------------------------
-    // Internal RegFile Forwarding (Read in ID)
-    // ----------------------------------------------------
+
     assign id_reg_rdata1 = (id_rs1 == 5'd0) ? 32'b0 :
                            (wb_alu_to_reg && !wb_fp_reg_write && (wb_rd == id_rs1)) ? wb_result :
                            regs[id_rs1];
@@ -231,8 +231,8 @@ module pipe #(
         .if_id_rs1        (id_rs1),
         .if_id_rs2        (id_rs2),
 
-        .ex_mem_is_fp     (mem_fp_reg_write), // <--- ADD THIS
-        .mem_wb_is_fp     (wb_fp_reg_write),  // <--- ADD THIS
+        .ex_mem_is_fp     (mem_fp_reg_write),
+        .mem_wb_is_fp     (wb_fp_reg_write),
         
         .ex_mem_reg_write (mem_alu_to_reg | mem_fp_reg_write),
         .ex_mem_rd        (mem_rd),
@@ -251,7 +251,9 @@ module pipe #(
         .flush_ex         (flush_ex_haz),
         
         .forward_a        (forward_a_sel),
-        .forward_b        (forward_b_sel)
+        .forward_b        (forward_b_sel),
+        .forward_a_fp     (forward_a_fp_sel),
+        .forward_b_fp     (forward_b_fp_sel)
     );
 
     // ----------------------------------------------------
@@ -442,6 +444,8 @@ module pipe #(
         // Forwarding
         .forward_a          (forward_a_sel),
         .forward_b          (forward_b_sel),
+        .forward_a_fp       (forward_a_fp_sel),
+        .forward_b_fp       (forward_b_fp_sel),
         .forward_ex_mem_val (mem_ex_result),
         .forward_mem_wb_val (wb_result),
 
@@ -552,7 +556,5 @@ module pipe #(
         
         .wb_result_o               (wb_result)
     );
-
-    // Removed duplicate assignments and redundant fpu_cvt/cmp instantiations.
-
+    
 endmodule
