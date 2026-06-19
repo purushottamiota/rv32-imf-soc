@@ -55,19 +55,19 @@ module bootloader (
             if (uart_rx_ready) begin
                 case (state)
                     S_IDLE: begin
-                        if (uart_rx_data == 8'hDE) state <= S_SYNC_1;
+                        if (uart_rx_data == 8'h42) state <= S_SYNC_1;
                         else state <= S_IDLE;
                     end
                     S_SYNC_1: begin
-                        if (uart_rx_data == 8'hAD) state <= S_SYNC_2;
+                        if (uart_rx_data == 8'h4F) state <= S_SYNC_2;
                         else state <= S_IDLE;
                     end
                     S_SYNC_2: begin
-                        if (uart_rx_data == 8'hBE) state <= S_SYNC_3;
+                        if (uart_rx_data == 8'h4F) state <= S_SYNC_3;
                         else state <= S_IDLE;
                     end
                     S_SYNC_3: begin
-                        if (uart_rx_data == 8'hEF) begin
+                        if (uart_rx_data == 8'h54) begin
                             state <= S_SIZE;
                             byte_idx <= 0;
                             payload_size <= 0;
