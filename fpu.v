@@ -17,7 +17,7 @@ module fpu(
 );
     `include "opcode.vh"
     
-    
+    // FIX: Added DONE_STATE=6 to break the stall deadlock
     localparam IDLE=0, ALIGN=1, DO_ADD=2, ITERATE=3, NORMALIZE=4, PACK=5, DONE_STATE=6;
     reg [2:0] state;
     
@@ -43,6 +43,7 @@ module fpu(
     
     // Intermediate registers for optimized single-cycle math
     wire signed [9:0] exp_diff = $signed({2'b0, exp_a}) - $signed({2'b0, exp_b});
+    wire [4:0] align_shift = exp_diff[9] ? -exp_diff : exp_diff;
     
     reg [24:0] add_sum_diff;
     reg [9:0]  add_exp_res;
@@ -54,13 +55,15 @@ module fpu(
 
     reg [47:0] norm_mant;
     reg signed [9:0] norm_exp;
+    reg [47:0] norm_mant_reg;
+    reg signed [9:0] norm_exp_reg;
     reg [5:0]  norm_shift;
     reg        norm_found;
     integer k;
     
-    wire [52:0] div_shifted = iter_acc << 1;                     
-    wire [26:0] div_upper   = div_shifted[52:26];                
-    wire        div_sub_ok  = (div_upper >= {1'b0, iter_div});   
+    wire [52:0] div_shifted = iter_acc << 1;                     // FIX: 53 bits
+    wire [26:0] div_upper   = div_shifted[52:26];                // FIX: 27 bits
+    wire        div_sub_ok  = (div_upper >= {1'b0, iter_div});   // FIX: Zero-pad iter_div for 27-bit safe comparison
 
     // --- CUSTOM FCVT.S.W BYPASS ---
     reg [31:0] cvt_sw_result;
@@ -99,7 +102,9 @@ module fpu(
     // --- MAIN FSM ---
     wire is_multi_cycle = (funct5 == FADD_S || funct5 == FSUB_S || funct5 == FMUL_S || funct5 == FDIV_S || funct5 == FSQRT_S);
 
-   
+    // Reset all FSM-owned state in one block so the synthesiser sees a clear
+    // priority between reset and the case-branch assignments (resolves Synth
+    // 8-7137 "set and reset with same priority" on exp_res / mant_res etc.).
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
             state     <= IDLE;
@@ -113,6 +118,8 @@ module fpu(
             iter_div  <= 26'b0;
             iter_count<= 6'b0;
             exp_b_reg <= 8'b0;
+            norm_mant_reg <= 48'b0;
+            norm_exp_reg  <= 10'sd0;
         end else begin
             case(state)
                 IDLE: begin
@@ -132,14 +139,14 @@ module fpu(
                         end
                         else if (funct5 == FDIV_S) begin
                             if (b[30:0] == 0) begin 
-                                if (a[30:0] == 0) final_res <= 32'h7FC00000; 
-                                else final_res <= {sign_a ^ b[31], 8'hFF, 23'b0}; 
-                                final_exc <= 0; 
+                                if (a[30:0] == 0) final_res <= 32'h7FC00000; // NaN for 0 / 0
+                                else final_res <= {sign_a ^ b[31], 8'hFF, 23'b0}; // +/- Infinity
+                                final_exc <= 0; // RV32F standard sets CSR flags, but does not hard-trap
                                 state <= DONE_STATE; 
                             end
                             else begin
                                 sign_res <= sign_a ^ b[31]; exp_res <= exp_a - exp_b + 127;
-                                iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {4'b0, 1'b1, a[22:0], 25'b0}; 
+                                iter_div <= {2'b0, 1'b1, b[22:0]}; iter_acc <= {4'b0, 1'b1, a[22:0], 25'b0}; // FIX: 4'b0 instead of 3'b0 to make 53 bits total
                                 iter_count <= 26; state <= ITERATE;
                             end
                         end
@@ -147,71 +154,37 @@ module fpu(
                 end
                 
                 ALIGN: begin
-                    if (exp_res > exp_b_reg) begin
-                        iter_div <= iter_div >> 1;
-                        exp_b_reg <= exp_b_reg + 1;
-                    end else if (exp_res < exp_b_reg) begin 
-                        exp_res <= exp_res + 1; 
-                        mant_res <= mant_res >> 1; 
+                    if (exp_diff > 0) begin
+                        mant_res <= {23'b0, mant_a};
+                        iter_div <= {23'b0, mant_b} >> align_shift;
+                        exp_res <= exp_a;
                     end else begin
-                        state <= DO_ADD;
+                        mant_res <= {23'b0, mant_a} >> align_shift;
+                        iter_div <= {23'b0, mant_b};
+                        exp_res <= exp_b;
                     end
+                    state <= DO_ADD;
                 end
                 
                 DO_ADD: begin
-                    // Perform addition/subtraction
                     if (sign_a == sign_b) begin 
-                        add_sum_diff = {1'b0, mant_res[24:0]} + {1'b0, iter_div[24:0]}; 
-                        add_sign_res = sign_a; 
+                        mant_res <= ({23'b0, mant_res[24:0]} + {23'b0, iter_div[24:0]}) << 23; 
+                        sign_res <= sign_a; 
                     end else begin
                         if (mant_res[24:0] >= iter_div[24:0]) begin 
-                            add_sum_diff = {1'b0, mant_res[24:0]} - {1'b0, iter_div[24:0]}; 
-                            add_sign_res = sign_a; 
+                            mant_res <= ({23'b0, mant_res[24:0]} - {23'b0, iter_div[24:0]}) << 23; 
+                            sign_res <= sign_a; 
                         end else begin 
-                            add_sum_diff = {1'b0, iter_div[24:0]} - {1'b0, mant_res[24:0]}; 
-                            add_sign_res = sign_b; 
+                            mant_res <= ({23'b0, iter_div[24:0]} - {23'b0, mant_res[24:0]}) << 23; 
+                            sign_res <= sign_b; 
                         end
                     end
-                    
-                    // Perform combinational normalization
-                    add_exp_res = exp_res;
-                    add_shift_amt = 0;
-                    add_found_one = 0;
-                    add_norm_mant = add_sum_diff;
-                    
-                    if (add_sum_diff[24]) begin
-                        add_norm_mant = add_sum_diff >> 1;
-                        add_exp_res = add_exp_res + 1;
-                    end else begin
-                        for (lzc = 23; lzc >= 0; lzc = lzc - 1) begin
-                            if (!add_found_one && add_sum_diff[lzc]) begin
-                                add_shift_amt = 23 - lzc;
-                                add_found_one = 1;
-                            end
-                        end
-                        if (add_found_one) begin
-                            add_norm_mant = add_sum_diff[23:0] << add_shift_amt;
-                            add_exp_res = add_exp_res - add_shift_amt;
-                        end else begin
-                            add_norm_mant = 0;
-                        end
-                    end
-                    
-                    // Perform packing logic combinationally
-                    if (add_norm_mant == 0 || $signed(add_exp_res) <= 0) begin
-                        final_res <= {add_sign_res, 31'b0};
-                    end else if (add_exp_res >= 255) begin
-                        final_res <= {add_sign_res, 8'hFF, 23'b0}; // Infinity
-                    end else begin
-                        final_res <= {add_sign_res, add_exp_res[7:0], add_norm_mant[22:0]};
-                    end
-                    
-                    state <= DONE_STATE;
+                    state <= NORMALIZE;
                 end
                 
                 ITERATE: begin
                     if (iter_count > 0) begin
-                        if (div_sub_ok) iter_acc <= { (div_upper - {1'b0, iter_div}), div_shifted[25:1], 1'b1 }; 
+                        if (div_sub_ok) iter_acc <= { (div_upper - {1'b0, iter_div}), div_shifted[25:1], 1'b1 }; // FIX: Zero-padded subtraction
                         else iter_acc <= { div_upper, div_shifted[25:1], 1'b0 };
                         iter_count <= iter_count - 1;
                     end else begin mant_res <= {1'b0, iter_acc[25:0], 21'b0}; state <= NORMALIZE; end
@@ -242,19 +215,20 @@ module fpu(
                         end
                     end
                     
-                    // PACK logic combinationally
-                    if (norm_mant == 0 || norm_exp <= 0) begin
-                        final_res <= {sign_res, 31'b0};
-                    end else if (norm_exp >= 255) begin
-                        final_res <= {sign_res, 8'hFF, 23'b0}; // Infinity
-                    end else begin
-                        final_res <= {sign_res, norm_exp[7:0], norm_mant[45:23]};
-                    end
-                    
-                    state <= DONE_STATE;
+                    // Register outputs to break timing path!
+                    norm_mant_reg <= norm_mant;
+                    norm_exp_reg  <= norm_exp;
+                    state <= PACK;
                 end
                 
                 PACK: begin
+                    if (norm_mant_reg == 0 || norm_exp_reg <= 0) begin
+                        final_res <= {sign_res, 31'b0};
+                    end else if (norm_exp_reg >= 255) begin
+                        final_res <= {sign_res, 8'hFF, 23'b0}; // Infinity
+                    end else begin
+                        final_res <= {sign_res, norm_exp_reg[7:0], norm_mant_reg[45:23]};
+                    end
                     state <= DONE_STATE; 
                 end
                 
@@ -268,7 +242,7 @@ module fpu(
         end
     end
 
-    
+    // FIX: The stall completely drops when we reach DONE_STATE, allowing the pipeline to advance
     assign stall_fpu = (fp_en && is_multi_cycle && state != DONE_STATE);
     
     wire [31:0] sgnj_result = (funct3 == 3'b000) ? {b[31], a[30:0]} :          // FSGNJ.S
@@ -295,7 +269,7 @@ module fpu(
             end else if (a[30:23] >= 127 + 31) begin
                 cvt_ws_result = a[31] ? 32'h80000000 : 32'h7FFFFFFF;
             end else begin
-                
+                // Use a standard left-shift to avoid variable right-shift signedness issues in synthesis
                 t_exp = a[30:23] - 8'd127;
                 expanded_mant = {40'd0, 1'b1, a[22:0]};
                 shifted_up = expanded_mant << t_exp;
@@ -306,7 +280,7 @@ module fpu(
         end
     end
 
-    // Floating-Point Comparison Logic (FEQ.S, FLT.S, FLE.S)
+    // Correct Floating-Point Comparison Logic (FEQ.S, FLT.S, FLE.S)
     wire a_is_zero = (a[30:0] == 31'b0);
     wire b_is_zero = (b[30:0] == 31'b0);
     wire both_zero = a_is_zero && b_is_zero;
