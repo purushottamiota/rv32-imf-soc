@@ -28,6 +28,8 @@ module hazard_unit (
     // Forwarding outputs
     output reg  [1:0] forward_a,
     output reg  [1:0] forward_b,
+    output reg  [1:0] forward_a_fp,
+    output reg  [1:0] forward_b_fp,
     
     // Hazard outputs
     output reg        stall_if,
@@ -37,7 +39,7 @@ module hazard_unit (
     output reg        flush_if,  // FLUSH IF/ID when branch taken
     output reg        flush_ex
 );
-
+ 
     always @(*) begin
         // --- Forwarding Logic ---
         // 00: Read from RegFile
@@ -46,22 +48,39 @@ module hazard_unit (
         
         forward_a = 2'b00;
         forward_b = 2'b00;
+        forward_a_fp = 2'b00;
+        forward_b_fp = 2'b00;
         
-        // --- Forward A (RS1) ---
-        // Forward if it's an FP write (even to f0), OR if it's an INT write to a non-zero register.
-        if (ex_mem_reg_write && (ex_mem_is_fp || (ex_mem_rd != 5'd0)) && (ex_mem_rd == id_ex_rs1)) begin
+        // --- Forward GPR A (RS1) ---
+        if (ex_mem_reg_write && !ex_mem_is_fp && (ex_mem_rd != 5'd0) && (ex_mem_rd == id_ex_rs1)) begin
             forward_a = 2'b10;
         end
-        else if (mem_wb_reg_write && (mem_wb_is_fp || (mem_wb_rd != 5'd0)) && (mem_wb_rd == id_ex_rs1)) begin
+        else if (mem_wb_reg_write && !mem_wb_is_fp && (mem_wb_rd != 5'd0) && (mem_wb_rd == id_ex_rs1)) begin
             forward_a = 2'b01;
         end
         
-        // --- Forward B (RS2) ---
-        if (ex_mem_reg_write && (ex_mem_is_fp || (ex_mem_rd != 5'd0)) && (ex_mem_rd == id_ex_rs2)) begin
+        // --- Forward GPR B (RS2) ---
+        if (ex_mem_reg_write && !ex_mem_is_fp && (ex_mem_rd != 5'd0) && (ex_mem_rd == id_ex_rs2)) begin
             forward_b = 2'b10;
         end
-        else if (mem_wb_reg_write && (mem_wb_is_fp || (mem_wb_rd != 5'd0)) && (mem_wb_rd == id_ex_rs2)) begin
+        else if (mem_wb_reg_write && !mem_wb_is_fp && (mem_wb_rd != 5'd0) && (mem_wb_rd == id_ex_rs2)) begin
             forward_b = 2'b01;
+        end
+
+        // --- Forward FPR A (RS1) ---
+        if (ex_mem_reg_write && ex_mem_is_fp && (ex_mem_rd == id_ex_rs1)) begin
+            forward_a_fp = 2'b10;
+        end
+        else if (mem_wb_reg_write && mem_wb_is_fp && (mem_wb_rd == id_ex_rs1)) begin
+            forward_a_fp = 2'b01;
+        end
+
+        // --- Forward FPR B (RS2) ---
+        if (ex_mem_reg_write && ex_mem_is_fp && (ex_mem_rd == id_ex_rs2)) begin
+            forward_b_fp = 2'b10;
+        end
+        else if (mem_wb_reg_write && mem_wb_is_fp && (mem_wb_rd == id_ex_rs2)) begin
+            forward_b_fp = 2'b01;
         end
 
         // --- Load-Use Hazard Logic ---
