@@ -39,6 +39,8 @@ module ex_stage (
     // Forwarding logic
     input  wire [1:0]  forward_a,
     input  wire [1:0]  forward_b,
+    input  wire [1:0]  forward_a_fp,
+    input  wire [1:0]  forward_b_fp,
     input  wire [31:0] forward_ex_mem_val,
     input  wire [31:0] forward_mem_wb_val,
 
@@ -81,14 +83,14 @@ module ex_stage (
         endcase
         
         // Similar forwarding approach for FP registers
-        case (forward_a)
+        case (forward_a_fp)
             2'b00: fp_fw_operand1 = fp_rdata1_i;
             2'b01: fp_fw_operand1 = forward_mem_wb_val;
             2'b10: fp_fw_operand1 = forward_ex_mem_val;
             default: fp_fw_operand1 = fp_rdata1_i;
         endcase
 
-        case (forward_b)
+        case (forward_b_fp)
             2'b00: fp_fw_operand2 = fp_rdata2_i;
             2'b01: fp_fw_operand2 = forward_mem_wb_val;
             2'b10: fp_fw_operand2 = forward_ex_mem_val;
