@@ -92,7 +92,7 @@ module tb_axi_soc;
             
             if (m_axi_arready) begin
                 m_axi_rvalid <= 1;
-                m_axi_rdata  <= 32'hDEADBEEF; // Dummy accelerator read
+                m_axi_rdata  <= 32'h424F4F54; // Dummy accelerator read
                 m_axi_rresp  <= 2'b00;
             end else if (m_axi_rready && m_axi_rvalid) begin
                 m_axi_rvalid <= 0;
