@@ -55,9 +55,9 @@ print("="*58)
 
 input("Press ENTER to transmit...")
 
-print("\nTransmitting 0xDEADBEEF header...")
-# Write Header (DEADBEEF)
-ser.write(bytes([0xDE, 0xAD, 0xBE, 0xEF]))
+print("\nTransmitting 0x424F4F54 (\"BOOT\") header...")
+# Write Header (BOOT)
+ser.write(bytes([0x42, 0x4F, 0x4F, 0x54]))
 
 # Write Size (Little Endian 32-bit)
 ser.write(struct.pack('<I', padded_size))
